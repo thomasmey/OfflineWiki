@@ -1,0 +1,9 @@
+Start with:
+
+java -cp path-to-classes/ offlineWiki.Run /path-to/dumfile/dewiki-latest-pages-articles.xml 2> ~/wiki-output.txt
+
+The wikipage is written to stderr. so open this file with a texteditor to read the found articles.
+
+End program with Ctrl+D
+
+When you start the program for the first time, the index is created which takes a few minutes,
