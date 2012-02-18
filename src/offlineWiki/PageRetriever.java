@@ -14,15 +14,20 @@ import java.util.Map;
 
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
+
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
 public class PageRetriever {
 
 	private File inFile;
 	
 	public PageRetriever(String filename) throws IOException {
+
 			inFile = new File(filename);
+
 	}
 
 	public WikiPage get(Long offset) throws IOException, XMLStreamException {
@@ -32,8 +37,8 @@ public class PageRetriever {
 		Map<Integer,QName> levelNameMap = new HashMap<Integer,QName>();
 
 		InputStream in = new FileInputStream(inFile);
-		in.skip(offset);
 		in = new BufferedInputStream(in);
+		in.skip(offset);
 		XMLInputFactory xif = XMLInputFactory.newFactory();
 		xif.setProperty("javax.xml.stream.isCoalescing", true);
 		XMLStreamReader xsr = xif.createXMLStreamReader(in);
@@ -44,7 +49,7 @@ public class PageRetriever {
 			int eventType = xsr.getEventType();
 			switch(eventType) {
 
-			case XMLStreamReader.START_ELEMENT:
+			case XMLStreamConstants.START_ELEMENT:
 				// add current level to map
 				level++;
 				QName currentName = xsr.getName();
@@ -59,7 +64,7 @@ public class PageRetriever {
 				}
 				break;
 
-			case XMLStreamReader.END_ELEMENT:
+			case XMLStreamConstants.END_ELEMENT:
 				levelNameMap.remove(level);
 				level--;
 				if(level==0) {
@@ -69,7 +74,7 @@ public class PageRetriever {
 				}
 				break;
 
-			case XMLStreamReader.CHARACTERS:
+			case XMLStreamConstants.CHARACTERS:
 				String currentText = xsr.getText();
 				
 				if(level < 3)

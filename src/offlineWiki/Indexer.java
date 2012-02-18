@@ -21,25 +21,25 @@ import java.util.TreeMap;
 
 public class Indexer {
 	
-	private RandomAccessFile raf;
-	private byte[] readBuffer = new byte[1024*1024*16];
+	private byte[] readBuffer;
 	private int readBufferPos;
 	private int readBufferLength;
 
-//	private Map<String,WikiPage> articleMap = new HashMap<String,WikiPage>();
 	private TreeMap<String,Long> articleIndexTitle = new TreeMap<String,Long>();
 	private long currenFilePos;
+	private RandomAccessFile raf;
 
 	public Indexer(String filename) throws IOException, ClassNotFoundException {
 		
-		File fIndex = new File(filename + ".index");
+		File fIndex;
+		fIndex = new File(filename + ".index");
+
 		if(fIndex.exists()) {
 			loadIndex(fIndex);
 		} else {
 			System.out.println("Index file not found!");
-			raf = new RandomAccessFile(filename, "r");
 			// index wikipage titles and their file offsets
-			createIndex();
+			createIndex(filename);
 			storeIndex(fIndex);
 		}
 
@@ -112,6 +112,9 @@ public class Indexer {
 	private int read() throws IOException {
 		
 		int rc = -1;
+		if(readBuffer== null)
+			readBuffer = new byte[1024*1024*16];
+
 		if(readBufferLength==0 || readBufferPos > readBufferLength - 1) {
 			readBufferLength = raf.read(readBuffer);
 			readBufferPos=0;
@@ -119,7 +122,7 @@ public class Indexer {
 		if(readBufferLength<0)
 			return rc;
 		
-		rc = (int)readBuffer[readBufferPos] & 0xff;
+		rc = readBuffer[readBufferPos] & 0xff;
 		readBufferPos++;
 		currenFilePos++;
 		if(currenFilePos % (1024*1024*128) == 0)
@@ -129,9 +132,11 @@ public class Indexer {
 
 	// we need to do the xml parsing ourself to get a connection between the current element file offset
 	// and the parser state...
-	public void createIndex() throws IOException {
+	public void createIndex(String filename) throws IOException {
 
 		System.out.println("Creating index.");
+		raf = new RandomAccessFile(filename, "r");
+
 		int level = 0;
 		Map<Integer,StringBuilder> levelNameMap = new HashMap<Integer,StringBuilder>();
 
@@ -256,6 +261,7 @@ public class Indexer {
 		}
 
 		raf.close();
+		readBuffer = null;
 	}
 
 	public TreeMap<String,Long> getArticleIndexTitle() {

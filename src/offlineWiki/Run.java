@@ -20,51 +20,22 @@ public class Run {
 	 */
 	public static void main(String[] args) throws IOException, ClassNotFoundException, XMLStreamException {
 
+		if(args.length  < 1) {
+			System.out.println("arg[0]=filename of uncompressed xml dump missing!");
+			System.exit(4);
+		}
+		
 		// get index
 		Indexer ix = new Indexer(args[0]);
 		TreeMap<String, Long> articleIndexTitle = ix.getArticleIndexTitle();
 
 		PageRetriever pr = new PageRetriever(args[0]);
 
-		Console c = System.console();
-		String searchArticle = null;
-		String key = null;
+		Thread t1 = new ConsoleDriver(articleIndexTitle, pr);
+		t1.start();
 
-		// get first word
-		System.out.print("> ");
-		searchArticle = c.readLine();
-
-		while (searchArticle != null) {
-
-			Long offset = null;
-			
-			// input starting with # lists the index.. (there seems to be no wikipage for '#' in the de dump!)
-			if(searchArticle.startsWith("#")) {
-				key = articleIndexTitle.ceilingKey(searchArticle.substring(1,searchArticle.length()));
-				// search >= key
-				for(int i=0;i< 20 && key != null;i++) {
-					key = articleIndexTitle.higherKey(key);
-					System.out.println("Next key: " + key);
-				}
-			} else
-				offset = articleIndexTitle.get(searchArticle);
-				
-			if(offset == null) {
-
-				key = articleIndexTitle.ceilingKey(searchArticle);
-				// search >= key
-				for(int i=0;i< 20 && key != null;i++) {
-					key = articleIndexTitle.higherKey(key);
-					System.out.println("Next key: " + key);
-				}
-			} else {
-				System.err.println(pr.get(offset).getText());
-			}
-			
-			// get next word
-			System.out.print("> ");
-			searchArticle = c.readLine();
-		}
+//		Thread t2 = new SwingDriver(articleIndexTitle, pr);
+//		t2.start();
 
 	}
 
