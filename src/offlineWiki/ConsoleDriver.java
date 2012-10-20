@@ -1,84 +1,61 @@
 package offlineWiki;
 
 import java.io.Console;
-import java.io.IOException;
-import java.util.TreeMap;
+import java.util.SortedSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-import javax.xml.stream.XMLStreamException;
+class ConsoleDriver implements Runnable {
 
-public class ConsoleDriver extends Thread {
+	private final PageStore<WikiPage> pageStore;
+	private final Logger log;
 
-	private TreeMap<String,Long> articleIndexTitle;
-	private PageRetriever pageRetriever;
-
-	public ConsoleDriver(TreeMap<String, Long> articleIndexTitle,
-			PageRetriever pr) {
-		this.pageRetriever = pr;
-		this.articleIndexTitle = articleIndexTitle;
+	public ConsoleDriver() {
+		this.pageStore = OfflineWiki.getInstance().getPageStore();
+		this.log = OfflineWiki.getInstance().getLogger();
 	}
 
 	@Override
 	public void run() {
 		
-		Console c = System.console();
-		if(c==null) {
-			System.out.println("Failed to grab console!\n");
-			System.exit(4);
+		Console console = System.console();
+		if(console==null) {
+			log.log(Level.SEVERE,"Failed to grab console!\n");
+			return;
 		}
 
 		String searchArticle = null;
-		String key = null;
+		SortedSet<WikiPage> wpSet = null;
 
 		// get first word
-		System.out.print("> ");
-		searchArticle = c.readLine();
+		searchArticle = console.readLine("%s", "> ");
 
 		while (searchArticle != null) {
 
-			Long offset = null;
-			
 			// input starting with # lists the index.. (there seems to be no wikipage for '###' in the de dump!)
 			if(searchArticle.startsWith("###")) {
-				key = articleIndexTitle.ceilingKey(searchArticle.substring(3,searchArticle.length()));
+				wpSet = pageStore.getTitleAscending(searchArticle.substring(3,searchArticle.length()), 20);
+
 				// search >= key
-				for(int i=0;i< 20 && key != null;i++) {
-					System.out.println("Next key: " + key);
-					key = articleIndexTitle.higherKey(key);
+				for(int i=0;i< 20 && wpSet != null;i++) {
+					console.printf("Next key: %s", wpSet);
 				}
 			} else {
-				offset = articleIndexTitle.get(searchArticle);
+				wpSet = pageStore.getTitleAscending(searchArticle, 3);
 
-				if(offset == null) {
-	
-					key = articleIndexTitle.ceilingKey(searchArticle);
-					// search >= key
-					for(int i=0;i< 20 && key != null;i++) {
-						System.out.println("Next key: " + key);
-						key = articleIndexTitle.higherKey(key);
-					}
+				if(wpSet.size() == 0) {
+					console.printf("%s", "No matches found!");
 				} else {
-//					System.out.println("offset + " + offset);
-					System.err.print("*****\nPage \"" + searchArticle + "\" found\n*****\n");
-					String currentWikiPage;
-					try {
-						currentWikiPage = pageRetriever.get(offset).getText();
-					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-						return;
-					} catch (XMLStreamException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-						return;
+					WikiPage cwp = wpSet.first();
+					if(cwp.getTitle().equals(searchArticle)) {
+						System.out.println(cwp);
+					} else {
+						
 					}
-					System.err.println(currentWikiPage);
 				}
 			}
 			// get next word
-			System.out.print("> ");
-			searchArticle = c.readLine();
+			searchArticle = console.readLine("%s", "> ");
 		}
 	}
-
-	
 }

@@ -4,9 +4,6 @@
 
 package offlineWiki;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -18,30 +15,29 @@ import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
-import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
+class PageRetriever {
 
-public class PageRetriever {
+	private final InputStream in;
+	private final Map<Integer,QName> levelNameMap;
 
-	private File inFile;
-	
-	public PageRetriever(String filename) throws IOException {
+	private WikiPage.Builder currentPageBuilder;
+	private int level;
+	private XMLStreamReader xsr;
 
-			inFile = new File(filename);
+	public PageRetriever(InputStream in) throws IOException, XMLStreamException {
+		this.in = in;
+		this.levelNameMap = new HashMap<Integer,QName>();
 
-	}
-
-	public WikiPage get(Long offset) throws IOException, XMLStreamException {
-
-		WikiPage currentPage = null;
-		int level = 0;
-		Map<Integer,QName> levelNameMap = new HashMap<Integer,QName>();
-
-		InputStream in = new FileInputStream(inFile);
-		in = new BufferedInputStream(in);
-		in.skip(offset);
 		XMLInputFactory xif = XMLInputFactory.newFactory();
 		xif.setProperty("javax.xml.stream.isCoalescing", true);
-		XMLStreamReader xsr = xif.createXMLStreamReader(in);
+		xsr = xif.createXMLStreamReader(in);
+	}
+
+	public WikiPage getNext() throws XMLStreamException, NumberFormatException, IOException {
+		return parsePage();
+	}
+
+	private WikiPage parsePage() throws NumberFormatException, XMLStreamException, IOException {
 
 		while(xsr.hasNext()) {
 			xsr.next();
@@ -57,10 +53,11 @@ public class PageRetriever {
 
 				// process "WikiPage"
 				if(currentName.getLocalPart().equals("page")) {
-//					if(currentPage != null) {
-//
-//					}
-					currentPage = new WikiPage();
+					if(currentPageBuilder == null) {
+						currentPageBuilder = new WikiPage.Builder();
+					} else {
+						return currentPageBuilder.build();
+					}
 				}
 				break;
 
@@ -70,34 +67,41 @@ public class PageRetriever {
 				if(level==0) {
 					xsr.close();
 					in.close();
-					return currentPage;
+					return currentPageBuilder.build();
 				}
 				break;
 
 			case XMLStreamConstants.CHARACTERS:
 				String currentText = xsr.getText();
-				
-				if(level < 3)
-					break;
+				QName levelPage = null;
 
-				QName levelPage = levelNameMap.get(1);
-				QName levelSubPage = levelNameMap.get(level);
-				if(levelPage.getLocalPart().equals("page")) {
-					if(levelSubPage.getLocalPart().equals("title")) {
-						currentPage.setTitle(currentText);
-					}
-					if(levelSubPage.getLocalPart().equals("id")) {
-						currentPage.setId(Long.parseLong(currentText));
-					}
-					if(levelSubPage.getLocalPart().equals("comment")) {
-						currentPage.setComment(currentText);
-					}
-					if(levelSubPage.getLocalPart().equals("text")) {
-						currentPage.setText(currentText);
+				if(level >= 2) {
+					levelPage = levelNameMap.get(2);
+					if(levelPage.getLocalPart().equals("page")) {
+						QName levelSubPage;
+						if(level == 3) {
+							levelSubPage = levelNameMap.get(level);
+							if(levelSubPage.getLocalPart().equals("title")) {
+								currentPageBuilder.setTitle(currentText);
+							}
+							if(levelSubPage.getLocalPart().equals("id")) {
+								currentPageBuilder.setId(Long.parseLong(currentText));
+							}
+						} else if (level == 4) {
+							levelSubPage = levelNameMap.get(level);
+							if(levelSubPage.getLocalPart().equals("id")) {
+								currentPageBuilder.setRevisionId(Long.parseLong(currentText));
+							}
+							if(levelSubPage.getLocalPart().equals("comment")) {
+								currentPageBuilder.setComment(currentText);
+							}
+							if(levelSubPage.getLocalPart().equals("text")) {
+								currentPageBuilder.setText(currentText);
+							}
+						}
 					}
 				}
 				break;
-				
 			}
 		}
 
