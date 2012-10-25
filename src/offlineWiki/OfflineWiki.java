@@ -46,9 +46,10 @@ class OfflineWiki implements Runnable {
 		xmlDumpFile = new File(fileName);
 		pageStore = new SerialisedFsStore();
 
+		new Indexer().createIndex();
+
 		if (!pageStore.exists()) {
 //			new Converter().convert();
-			new Converter().convertToIndex();
 		}
 
 		interactionDriver = new ConsoleDriver();

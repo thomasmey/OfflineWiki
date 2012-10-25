@@ -5,24 +5,54 @@
 package offlineWiki;
 
 import java.io.EOFException;
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.InputStream;
 import java.io.Reader;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 
 class Utf8Reader extends Reader {
 
-	private byte[] readBuffer;
-	private int readBufferPos;
-	private int readBufferLength;
+	private static class Buffer extends InputStream {
+		private final byte[] data;
+		private final int length;
+		private int position;
+
+		public Buffer(byte[] data, int length) {
+			super();
+			this.data = data;
+			this.length = length;
+		}
+
+		public int read() {
+			assert position >= 0;
+
+			if(position >= length || length < 0)
+				return -1;
+
+			int rc = data[position] & 0xff;
+			position++;
+			return rc;
+		}
+
+		public int available() {
+			int rem = position - length;
+			return rem <=0 ? 0 : rem;
+		}
+	}
+
+	private static final int BUFFER_SIZE = 1024 * 124;
+
+	private Buffer readBuffer;
+	private Future<Buffer> readBufferNextTask;
 
 	private long currenFilePos;
-	private final RandomAccessFile raf;
+	private final InputStream in;
 
-	public Utf8Reader(File inputFile) throws FileNotFoundException {
-		raf = new RandomAccessFile(inputFile, "r");
+	public Utf8Reader(InputStream in) {
+		this.in = in;
 	}
 
 	public long getCurrenFilePos() {
@@ -37,7 +67,8 @@ class Utf8Reader extends Reader {
 	@Override
 	public void close() throws IOException {
 		readBuffer = null;
-		raf.close();
+		readBufferNextTask.cancel(true);
+		in.close();
 	}
 
 	// this implements an easy method to get the next UTF-8 char...
@@ -90,21 +121,53 @@ class Utf8Reader extends Reader {
 	private int readBuffered() throws IOException {
 
 		int rc = -1;
-		if(readBuffer== null)
-			readBuffer = new byte[1024*1024*16];
 
-		if(readBufferLength==0 || readBufferPos > readBufferLength - 1) {
-			readBufferLength = raf.read(readBuffer);
-			readBufferPos=0;
+		if(readBuffer== null) {
+			byte[] data = new byte[BUFFER_SIZE];
+			int length = in.read(data);
+			readBuffer = new Buffer(data, length);
+			if(readBuffer.available() == 0)
+				return rc;
+		} else {
+			if(readBuffer.available() == 0) {
+
+				if(readBufferNextTask == null) {
+					//first call read first buffer data and schedule next
+					scheduleReadBufferNext();
+				} else {
+					try {
+						readBuffer = readBufferNextTask.get();
+						scheduleReadBufferNext();
+					} catch (InterruptedException e) {
+						throw new IOException(e);
+					} catch (ExecutionException e) {
+						OfflineWiki.getInstance().getLogger().log(Level.SEVERE, "Exception in read occured!", e);
+						return rc;
+					}
+				}
+			}
 		}
-		if(readBufferLength < 0)
+
+		rc = readBuffer.read();
+		if(rc < 0)
 			return rc;
 
-		rc = readBuffer[readBufferPos] & 0xff;
-		readBufferPos++;
-		currenFilePos++;
-		if(currenFilePos % (1024*1024*128) == 0)
+		if(++currenFilePos % (1024*1024*128) == 0)
 			OfflineWiki.getInstance().getLogger().log(Level.FINE,"FilePos: " + currenFilePos);
 		return rc;
+	}
+
+	private void scheduleReadBufferNext() {
+		Callable<Buffer> readNextTask = null;
+		readNextTask = new Callable<Buffer>() {
+
+			@Override
+			public Buffer call() throws Exception {
+				byte[] data = new byte[BUFFER_SIZE];
+				int length = in.read(data);
+				return new Buffer(data, length);
+			}
+		};
+		readBufferNextTask = OfflineWiki.getInstance().getThreadPool().submit(readNextTask);
 	}
 }
