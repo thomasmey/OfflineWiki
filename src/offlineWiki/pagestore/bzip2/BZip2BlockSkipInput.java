@@ -1,12 +1,13 @@
-package offlineWiki;
+package offlineWiki.pagestore.bzip2;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
 class BZip2BlockSkipInput extends InputStream {
 
-	public BZip2BlockSkipInput(File inputFile) {
+	public BZip2BlockSkipInput(FileInputStream fileInputStream) {
 		// TODO Auto-generated constructor stub
 	}
 

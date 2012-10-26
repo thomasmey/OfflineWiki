@@ -11,7 +11,11 @@ import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-class OfflineWiki implements Runnable {
+import offlineWiki.frontend.console.ConsoleDriver;
+import offlineWiki.pagestore.PageStore;
+import offlineWiki.pagestore.bzip2.BZip2Store;
+
+public class OfflineWiki implements Runnable {
 
 	private final PageStore<WikiPage> pageStore;
 	private final File xmlDumpFile;
@@ -44,12 +48,10 @@ class OfflineWiki implements Runnable {
 		threadPool = Executors.newCachedThreadPool();
 
 		xmlDumpFile = new File(fileName);
-		pageStore = new SerialisedFsStore();
-
-		new Indexer().createIndex();
+		pageStore = new BZip2Store();
 
 		if (!pageStore.exists()) {
-//			new Converter().convert();
+			pageStore.convert();
 		}
 
 		interactionDriver = new ConsoleDriver();

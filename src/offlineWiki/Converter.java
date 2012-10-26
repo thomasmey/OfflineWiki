@@ -14,6 +14,8 @@ import java.util.logging.Logger;
 
 import javax.xml.stream.XMLStreamException;
 
+import offlineWiki.pagestore.PageStore;
+
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
 class Converter {

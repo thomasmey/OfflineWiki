@@ -1,7 +1,10 @@
-package offlineWiki;
+package offlineWiki.pagestore;
 
 import java.io.File;
 import java.util.SortedSet;
+
+import offlineWiki.OfflineWiki;
+import offlineWiki.WikiPage;
 
 import com.db4o.Db4oEmbedded;
 import com.db4o.ObjectContainer;
@@ -82,6 +85,12 @@ class OdbStore implements PageStore<WikiPage> {
 	public boolean exists() {
 		// TODO Auto-generated method stub
 		return false;
+	}
+
+	@Override
+	public void convert() {
+		// TODO Auto-generated method stub
+		
 	}
 
 }

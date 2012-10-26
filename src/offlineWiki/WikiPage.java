@@ -10,7 +10,7 @@ import java.util.List;
 
 import com.db4o.config.annotations.Indexed;
 
-class WikiPage implements Serializable {
+public class WikiPage implements Serializable {
 
 	@Indexed
 	private final String title;

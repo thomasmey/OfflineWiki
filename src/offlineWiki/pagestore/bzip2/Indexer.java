@@ -2,21 +2,27 @@
  * Copyright (C) 2012 Thomas Meyer
  */
 
-package offlineWiki;
+package offlineWiki.pagestore.bzip2;
 
-import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.AbstractMap;
-import java.util.Arrays;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import offlineWiki.OfflineWiki;
+import offlineWiki.Utf8Reader;
+import offlineWiki.fileindex.FileIndexWriter;
+import offlineWiki.fileindex.entry.BlockPosition;
+import offlineWiki.fileindex.entry.TitlePosition;
+
+import org.apache.commons.compress.compressors.CompressorInputStream;
+import org.apache.commons.compress.compressors.bzip2.BZip2BlockListener;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
 class Indexer {
@@ -32,7 +38,9 @@ class Indexer {
 	// and the parser state...
 	public void createIndex() {
 
-		DataOutputStream out = null;
+		FileIndexWriter<TitlePosition> fileIndex = null;
+		FileIndexWriter<BlockPosition> fileIndexBlock = null;
+
 		int level = 0;
 		Map<Integer,StringBuilder> levelNameMap = new HashMap<Integer,StringBuilder>();
 
@@ -40,22 +48,43 @@ class Indexer {
 		int[] sbChar = new int[1024*1024*16];
 		int sbCharPos = 0;
 		long currentTagPos = 0;
+		long currentBlockNo = 0;
 		int currentMode = 0;
 		int prevMode = 0;
 
 		int currentChar = 0;
 		Utf8Reader utf8Reader = null;
+		BZip2CompressorInputStream bZip2In = null;
 		int titleCount = 0;
 
 		try {
 			if(inputFile.getName().endsWith(".bz2")) {
-				BZip2BlockSkipInput bZip2BlockSkipInput = new BZip2BlockSkipInput(inputFile);
-				utf8Reader = new Utf8Reader(new BZip2CompressorInputStream(bZip2BlockSkipInput));
+
+				class BlockListener implements BZip2BlockListener {
+
+					private final FileIndexWriter<BlockPosition> fileIndex;
+					public BlockListener(FileIndexWriter<BlockPosition> fileIndexBlock) {
+						fileIndex = fileIndexBlock;
+					}
+
+					@Override
+					public void newBlock(CompressorInputStream in, long currBlockNo, long currBlockPosition) {
+						fileIndex.add(new BlockPosition(currBlockNo, currBlockPosition, in.getBytesRead()));
+					}
+				}
+
+				fileIndexBlock = new FileIndexWriter<BlockPosition>(inputFile, "blockPos");
+				BlockListener bListen = new BlockListener(fileIndexBlock);
+
+				InputStream in = new BufferedInputStream(new FileInputStream(inputFile));
+				bZip2In = new BZip2CompressorInputStream(in, false, bListen);
+				utf8Reader = new Utf8Reader(bZip2In);
+
 			} else if(inputFile.getName().endsWith(".xml")) {
 				utf8Reader = new Utf8Reader(new FileInputStream(inputFile));
 			}
 
-			out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(inputFile + ".index")));
+			fileIndex = new FileIndexWriter<TitlePosition>(inputFile, "titlePos");
 
 			// read first
 			currentChar = utf8Reader.read();
@@ -145,6 +174,7 @@ class Indexer {
 					if(currentMode==0 && level == 2 && levelNameMap.get(2).toString().equals("page")) {
 						// save position
 						currentTagPos = utf8Reader.getCurrenFilePos() - 6;
+//						currentBlockNo = bZip2In.getCurrBlockNo();
 					}
 					if(currentMode==2 && level == 3 && levelNameMap.get(2).toString().equals("page") && levelNameMap.get(3).toString().equals("title")) {
 						StringBuilder sb = new StringBuilder(256);
@@ -152,12 +182,12 @@ class Indexer {
 							sb.appendCodePoint(sbChar[i]);
 						}
 						String title = sb.toString();
-						Map.Entry<String,Long> indexEntry = new AbstractMap.SimpleImmutableEntry<String, Long>(title, currentTagPos);
-						IndexEntryUtility.writeObject(out, indexEntry);
+						TitlePosition indexEntry = new TitlePosition(title, currentTagPos, currentBlockNo);
+						fileIndex.add(indexEntry);
 						titleCount++;
 						if(titleCount % 500 == 0) {
-							out.flush();
 							log.log(Level.FINE,"Processed {0} pages", titleCount);
+							System.out.println("Processed " +  titleCount + " pages");
 						}
 					}
 				}
@@ -175,35 +205,13 @@ class Indexer {
 					utf8Reader.close();
 			} catch (IOException e) {}
 			try {
-				if(out != null)
-					out.close();
+				if(fileIndex != null)
+					fileIndex.close();
+			} catch (IOException e) {}
+			try {
+				if(fileIndexBlock != null)
+					fileIndexBlock.close();
 			} catch (IOException e) {}
 		}
-	}
-}
-
-class IndexEntryUtility /*implements Serializable*/ {
-	private final static int titleLenMax = 255;
-	
-	static void writeObject(DataOutputStream out, Map.Entry<String,Long> entry) throws IOException {
-		String key = entry.getKey();
-		long value = entry.getValue();
-
-		short keyLen;
-		char[] keyArray;
-		long position;
-
-		if(key.length() > titleLenMax) {
-			OfflineWiki.getInstance().getLogger().log(Level.SEVERE, "Titel too long: \"{0}\" - {1}", new String[] {key, Integer.valueOf(key.length()).toString()});
-			throw new IllegalArgumentException("Titel is too long!");
-		}
-
-		keyLen = (short) key.length();
-		keyArray = Arrays.copyOf(key.toCharArray(), titleLenMax);
-		position = value;
-		out.writeShort(keyLen);
-		for(char c : keyArray)
-			out.writeChar(c);
-		out.writeLong(position);
 	}
 }

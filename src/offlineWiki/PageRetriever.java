@@ -15,7 +15,7 @@ import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
-class PageRetriever {
+public class PageRetriever {
 
 	private final InputStream in;
 	private final Map<Integer,QName> levelNameMap;

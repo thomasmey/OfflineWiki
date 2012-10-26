@@ -1,11 +1,15 @@
-package offlineWiki;
+package offlineWiki.frontend.console;
 
 import java.io.Console;
 import java.util.SortedSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-class ConsoleDriver implements Runnable {
+import offlineWiki.OfflineWiki;
+import offlineWiki.WikiPage;
+import offlineWiki.pagestore.PageStore;
+
+public class ConsoleDriver implements Runnable {
 
 	private final PageStore<WikiPage> pageStore;
 	private final Logger log;

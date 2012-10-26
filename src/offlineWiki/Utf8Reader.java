@@ -13,7 +13,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 
-class Utf8Reader extends Reader {
+public class Utf8Reader extends Reader {
 
 	private static class Buffer extends InputStream {
 		private final byte[] data;
@@ -38,12 +38,14 @@ class Utf8Reader extends Reader {
 		}
 
 		public int available() {
-			int rem = position - length;
-			return rem <=0 ? 0 : rem;
+			if(length <= 0)
+				return 0;
+
+			return length - position;
 		}
 	}
 
-	private static final int BUFFER_SIZE = 1024 * 124;
+	private static final int BUFFER_SIZE = 4 * 1024 * 1024;
 
 	private Buffer readBuffer;
 	private Future<Buffer> readBufferNextTask;
@@ -66,8 +68,9 @@ class Utf8Reader extends Reader {
 
 	@Override
 	public void close() throws IOException {
-		readBuffer = null;
-		readBufferNextTask.cancel(true);
+//		readBuffer = null;
+//		if(readBufferNextTask != null)
+//			readBufferNextTask.cancel(true);
 		in.close();
 	}
 
@@ -91,15 +94,13 @@ class Utf8Reader extends Reader {
 			if((b >> 5) == 0x06) {
 				mask = 0x1f;
 				count = 1;
-			} else
-				if((b >> 4) == 0xe) {
-					mask = 0x0f;
-					count = 2;
-				} else
-					if((b >> 3) == 0x1e) {
-						mask = 0x07;
-						count = 3;
-					}
+			} else if((b >> 4) == 0xe) {
+				mask = 0x0f;
+				count = 2;
+			} else if((b >> 3) == 0x1e) {
+				mask = 0x07;
+				count = 3;
+			}
 
 			rc = b & mask;
 			for(int i = 0; i < count; i++) {
@@ -123,27 +124,29 @@ class Utf8Reader extends Reader {
 		int rc = -1;
 
 		if(readBuffer== null) {
-			byte[] data = new byte[BUFFER_SIZE];
-			int length = in.read(data);
-			readBuffer = new Buffer(data, length);
-			if(readBuffer.available() == 0)
-				return rc;
-		} else {
-			if(readBuffer.available() == 0) {
-
-				if(readBufferNextTask == null) {
-					//first call read first buffer data and schedule next
+			scheduleReadBufferNext();
+			try {
+				readBuffer = readBufferNextTask.get();
+				if(readBuffer.available() > 0)
 					scheduleReadBufferNext();
-				} else {
-					try {
-						readBuffer = readBufferNextTask.get();
+			} catch (InterruptedException e) {
+				throw new IOException(e);
+			} catch (ExecutionException e) {
+				OfflineWiki.getInstance().getLogger().log(Level.SEVERE, "Exception in read occured!", e);
+				return rc;
+			}
+		}
+		else {
+			if(readBuffer.available() == 0) {
+				try {
+					readBuffer = readBufferNextTask.get();
+					if(readBuffer.available() > 0)
 						scheduleReadBufferNext();
-					} catch (InterruptedException e) {
-						throw new IOException(e);
-					} catch (ExecutionException e) {
-						OfflineWiki.getInstance().getLogger().log(Level.SEVERE, "Exception in read occured!", e);
-						return rc;
-					}
+				} catch (InterruptedException e) {
+					throw new IOException(e);
+				} catch (ExecutionException e) {
+					OfflineWiki.getInstance().getLogger().log(Level.SEVERE, "Exception in read occured!", e);
+					return rc;
 				}
 			}
 		}

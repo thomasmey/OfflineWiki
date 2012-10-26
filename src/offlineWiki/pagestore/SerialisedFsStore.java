@@ -1,4 +1,4 @@
-package offlineWiki;
+package offlineWiki.pagestore;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -10,6 +10,9 @@ import java.util.SortedSet;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
+
+import offlineWiki.OfflineWiki;
+import offlineWiki.WikiPage;
 
 class SerialisedFsStore implements PageStore<WikiPage> {
 
@@ -97,6 +100,12 @@ class SerialisedFsStore implements PageStore<WikiPage> {
 	public boolean exists() {
 		// TODO Auto-generated method stub
 		return false;
+	}
+
+	@Override
+	public void convert() {
+		// TODO Auto-generated method stub
+		
 	}
 
 }

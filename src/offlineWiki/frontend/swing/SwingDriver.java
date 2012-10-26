@@ -1,4 +1,4 @@
-package offlineWiki;
+package offlineWiki.frontend.swing;
 
 import java.util.TreeMap;
 
@@ -6,6 +6,8 @@ import javax.swing.JFrame;
 import javax.swing.JList;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
+
+import offlineWiki.PageRetriever;
 
 class SwingDriver implements Runnable {
 
