@@ -1,12 +1,17 @@
+/*
+ * Copyright 2012 Thomas Meyer
+ */
+
 package offlineWiki.fileindex.entry;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
+import java.io.Serializable;
 
-import offlineWiki.fileindex.FileIndexAccessable;
+public class BlockPosition implements Serializable {
 
-public class BlockPosition implements FileIndexAccessable<BlockPosition>{
+	/**
+	 * object format v1
+	 */
+	private static final long serialVersionUID = 1L;
 
 	private final long blockNo;
 	private final long blockPosition;
@@ -19,28 +24,19 @@ public class BlockPosition implements FileIndexAccessable<BlockPosition>{
 	}
 
 	@Override
-	public BlockPosition read(DataInput in) throws IOException {
-		long blockNo = in.readLong();
-		long blockPosition = in.readLong();
-		long uncompressedPosition = in.readLong();
-		return new BlockPosition(blockNo, blockPosition, uncompressedPosition);
+	public String toString() {
+		return "" + '[' + blockNo + '-' + blockPosition + '-' + uncompressedPosition + ']'; 
 	}
 
-	@Override
-	public void write(DataOutput out) throws IOException {
-		out.writeLong(blockNo);
-		out.writeLong(blockPosition);
-		out.writeLong(uncompressedPosition);
+	public long getBlockNo() {
+		return blockNo;
 	}
 
-	@Override
-	public boolean isEntrySizeConstant() {
-		return true;
+	public long getBlockPosition() {
+		return blockPosition;
 	}
 
-	@Override
-	public int getEntrySize() {
-		return Long.SIZE / 8 * 3;
+	public long getUncompressedPosition() {
+		return uncompressedPosition;
 	}
-
 }

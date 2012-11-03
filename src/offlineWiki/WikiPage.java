@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Thomas Meyer
+ * Copyright 2012 Thomas Meyer
  */
 
 package offlineWiki;
@@ -8,11 +8,8 @@ import java.io.Serializable;
 import java.util.Date;
 import java.util.List;
 
-import com.db4o.config.annotations.Indexed;
+public class WikiPage {
 
-public class WikiPage implements Serializable {
-
-	@Indexed
 	private final String title;
 	private final long id;
 //	private final WikiRevision revision;
@@ -21,7 +18,7 @@ public class WikiPage implements Serializable {
 	private final List<String> contributorIp;
 	private final String comment;
 	private final String text;
-	
+
 	public static class Builder {
 		private String title;
 		private long id;
@@ -31,30 +28,39 @@ public class WikiPage implements Serializable {
 		private List<String> contributorIp;
 		private String comment;
 		private String text;
+
 		public void setTitle(String title) {
 			this.title = title;
 		}
+
 		public void setId(long id) {
 			this.id = id;
 		}
+
 		public void setRevId(long revId) {
 			this.revId = revId;
 		}
+
 		public void setTimestamp(Date timestamp) {
 			this.timestamp = timestamp;
 		}
+
 		public void setContributorIp(List<String> contributorIp) {
 			this.contributorIp = contributorIp;
 		}
+
 		public void setComment(String comment) {
 			this.comment = comment;
 		}
+
 		public void setText(String text) {
 			this.text = text;
 		}
+
 		public void setRevisionId(long parseLong) {
 			revId = parseLong;
-		}		
+		}
+
 		WikiPage build() {
 			if(title == null)
 				throw new RuntimeException("Title is not set!");
@@ -76,21 +82,27 @@ public class WikiPage implements Serializable {
 	public String getTitle() {
 		return title;
 	}
+
 	public long getId() {
 		return id;
 	}
+
 	public long getRevId() {
 		return revId;
 	}
+
 	public Date getTimestamp() {
 		return timestamp;
 	}
+
 	public List<String> getContributorIp() {
 		return contributorIp;
 	}
+
 	public String getComment() {
 		return comment;
 	}
+
 	public String getText() {
 		return text;
 	}

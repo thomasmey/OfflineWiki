@@ -1,3 +1,7 @@
+/*
+ * Copyright 2012 Thomas Meyer
+ */
+
 package offlineWiki.pagestore;
 
 import java.util.SortedSet;

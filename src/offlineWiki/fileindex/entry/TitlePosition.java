@@ -1,47 +1,53 @@
+/*
+ * Copyright 2012 Thomas Meyer
+ */
+
 package offlineWiki.fileindex.entry;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
+import java.io.Serializable;
 
-import offlineWiki.fileindex.FileIndexAccessable;
+public class TitlePosition implements Serializable {
 
-public class TitlePosition implements FileIndexAccessable<TitlePosition> {
+	/**
+	 * object format v1
+	 */
+	private static final long serialVersionUID = 1L;
 
-	private final char[] title;
+	private final String title;
 	private final long position;
 	private final long blockNo;
 
 	@Override
-	public TitlePosition read(DataInput in) {
-		// TODO Auto-generated method stub
-		return null;
+	public int hashCode() {
+		return title.hashCode();
+	}
+
+	@Override
+	public String toString() {
+		return '[' + title + '-' + position + '-' + blockNo + ']';
+	}
+
+	public long getPosition() {
+		return position;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if(obj instanceof TitlePosition) {
+			TitlePosition pos = (TitlePosition) obj;
+			return title.equals(pos.title) && position == pos.position && blockNo == pos.blockNo;
+		}
+		return false;
 	}
 
 	public TitlePosition(String title, long position, long blockNo) {
 		super();
-		this.title = title.toCharArray();
+		this.title = title;
 		this.position = position;
 		this.blockNo = blockNo;
 	}
 
-	@Override
-	public void write(DataOutput out) throws IOException {
-		out.writeShort(title.length);
-		for(char c : title)
-			out.writeChar(c);
-		out.writeLong(position);
-		out.writeLong(blockNo);
+	public String getTitle() {
+		return title;
 	}
-
-	@Override
-	public boolean isEntrySizeConstant() {
-		return false;
-	}
-
-	@Override
-	public int getEntrySize() {
-		throw new UnsupportedOperationException();
-	}
-
-}
+};

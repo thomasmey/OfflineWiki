@@ -1,3 +1,7 @@
+/*
+ * Copyright 2012 Thomas Meyer
+ */
+
 package offlineWiki;
 
 import java.awt.BorderLayout;

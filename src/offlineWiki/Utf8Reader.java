@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Thomas Meyer
+ * Copyright 2012 Thomas Meyer
  */
 
 package offlineWiki;
@@ -45,16 +45,18 @@ public class Utf8Reader extends Reader {
 		}
 	}
 
-	private static final int BUFFER_SIZE = 4 * 1024 * 1024;
-
 	private Buffer readBuffer;
 	private Future<Buffer> readBufferNextTask;
 
 	private long currenFilePos;
 	private final InputStream in;
 
+	private static int timeDiff = -1;
+	private static int BUFFER_SIZE = 1024;
+
 	public Utf8Reader(InputStream in) {
 		this.in = in;
+		scheduleReadBufferNext();
 	}
 
 	public long getCurrenFilePos() {
@@ -123,8 +125,7 @@ public class Utf8Reader extends Reader {
 
 		int rc = -1;
 
-		if(readBuffer== null) {
-			scheduleReadBufferNext();
+		if(readBuffer == null || readBuffer != null && readBuffer.available() == 0) {
 			try {
 				readBuffer = readBufferNextTask.get();
 				if(readBuffer.available() > 0)
@@ -134,20 +135,6 @@ public class Utf8Reader extends Reader {
 			} catch (ExecutionException e) {
 				OfflineWiki.getInstance().getLogger().log(Level.SEVERE, "Exception in read occured!", e);
 				return rc;
-			}
-		}
-		else {
-			if(readBuffer.available() == 0) {
-				try {
-					readBuffer = readBufferNextTask.get();
-					if(readBuffer.available() > 0)
-						scheduleReadBufferNext();
-				} catch (InterruptedException e) {
-					throw new IOException(e);
-				} catch (ExecutionException e) {
-					OfflineWiki.getInstance().getLogger().log(Level.SEVERE, "Exception in read occured!", e);
-					return rc;
-				}
 			}
 		}
 
@@ -166,9 +153,15 @@ public class Utf8Reader extends Reader {
 
 			@Override
 			public Buffer call() throws Exception {
+				long startTime = System.nanoTime();
 				byte[] data = new byte[BUFFER_SIZE];
 				int length = in.read(data);
-				return new Buffer(data, length);
+				Buffer b =  new Buffer(data, length);
+				long diff = System.nanoTime() - startTime;
+				if(timeDiff < 0 || diff < timeDiff) {
+					System.out.println("new buffer size = " + (BUFFER_SIZE *= 2) + " time diff was " + diff);
+				}
+				return b;
 			}
 		};
 		readBufferNextTask = OfflineWiki.getInstance().getThreadPool().submit(readNextTask);

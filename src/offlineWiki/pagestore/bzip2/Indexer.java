@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Thomas Meyer
+ * Copyright 2012 Thomas Meyer
  */
 
 package offlineWiki.pagestore.bzip2;
@@ -10,6 +10,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
@@ -17,17 +19,24 @@ import java.util.logging.Logger;
 
 import offlineWiki.OfflineWiki;
 import offlineWiki.Utf8Reader;
-import offlineWiki.fileindex.FileIndexWriter;
 import offlineWiki.fileindex.entry.BlockPosition;
+import offlineWiki.fileindex.entry.ComparatorBlockPosition;
+import offlineWiki.fileindex.entry.ComparatorTitlePosition;
 import offlineWiki.fileindex.entry.TitlePosition;
 
 import org.apache.commons.compress.compressors.CompressorInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2BlockListener;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
-class Indexer {
+import common.io.objectstream.index.IndexMerger;
+import common.io.objectstream.index.IndexWriter;
+
+class Indexer implements Runnable {
 	private final File inputFile;
 	private final Logger log;
+
+	private final Comparator<TitlePosition> comparatorTitlePosition = new ComparatorTitlePosition();
+	private final Comparator<BlockPosition> comparatorBlockPosition = new ComparatorBlockPosition();
 
 	public Indexer() {
 		this.inputFile = OfflineWiki.getInstance().getXmlDumpFile();
@@ -36,10 +45,10 @@ class Indexer {
 
 	// we need to do the XML parsing ourself to get a connection between the current element file offset
 	// and the parser state...
-	public void createIndex() {
+	public void run() {
 
-		FileIndexWriter<TitlePosition> fileIndex = null;
-		FileIndexWriter<BlockPosition> fileIndexBlock = null;
+		IndexWriter<TitlePosition> fileIndexWriterTitle = null;
+		IndexWriter<BlockPosition> fileIndexWriterBlock = null;
 
 		int level = 0;
 		Map<Integer,StringBuilder> levelNameMap = new HashMap<Integer,StringBuilder>();
@@ -48,7 +57,6 @@ class Indexer {
 		int[] sbChar = new int[1024*1024*16];
 		int sbCharPos = 0;
 		long currentTagPos = 0;
-		long currentBlockNo = 0;
 		int currentMode = 0;
 		int prevMode = 0;
 
@@ -62,19 +70,19 @@ class Indexer {
 
 				class BlockListener implements BZip2BlockListener {
 
-					private final FileIndexWriter<BlockPosition> fileIndex;
-					public BlockListener(FileIndexWriter<BlockPosition> fileIndexBlock) {
+					private final IndexWriter<BlockPosition> fileIndex;
+					public BlockListener(IndexWriter<BlockPosition> fileIndexBlock) {
 						fileIndex = fileIndexBlock;
 					}
 
 					@Override
 					public void newBlock(CompressorInputStream in, long currBlockNo, long currBlockPosition) {
-						fileIndex.add(new BlockPosition(currBlockNo, currBlockPosition, in.getBytesRead()));
+						fileIndex.write(new BlockPosition(currBlockNo, currBlockPosition, in.getBytesRead()));
 					}
 				}
 
-				fileIndexBlock = new FileIndexWriter<BlockPosition>(inputFile, "blockPos");
-				BlockListener bListen = new BlockListener(fileIndexBlock);
+				fileIndexWriterBlock = new IndexWriter<BlockPosition>(inputFile, "blockPos", comparatorBlockPosition);
+				BlockListener bListen = new BlockListener(fileIndexWriterBlock);
 
 				InputStream in = new BufferedInputStream(new FileInputStream(inputFile));
 				bZip2In = new BZip2CompressorInputStream(in, false, bListen);
@@ -84,7 +92,7 @@ class Indexer {
 				utf8Reader = new Utf8Reader(new FileInputStream(inputFile));
 			}
 
-			fileIndex = new FileIndexWriter<TitlePosition>(inputFile, "titlePos");
+			fileIndexWriterTitle = new IndexWriter<TitlePosition>(inputFile, "titlePos", comparatorTitlePosition);
 
 			// read first
 			currentChar = utf8Reader.read();
@@ -174,7 +182,6 @@ class Indexer {
 					if(currentMode==0 && level == 2 && levelNameMap.get(2).toString().equals("page")) {
 						// save position
 						currentTagPos = utf8Reader.getCurrenFilePos() - 6;
-//						currentBlockNo = bZip2In.getCurrBlockNo();
 					}
 					if(currentMode==2 && level == 3 && levelNameMap.get(2).toString().equals("page") && levelNameMap.get(3).toString().equals("title")) {
 						StringBuilder sb = new StringBuilder(256);
@@ -182,8 +189,8 @@ class Indexer {
 							sb.appendCodePoint(sbChar[i]);
 						}
 						String title = sb.toString();
-						TitlePosition indexEntry = new TitlePosition(title, currentTagPos, currentBlockNo);
-						fileIndex.add(indexEntry);
+						TitlePosition indexEntry = new TitlePosition(title, currentTagPos, 0);
+						fileIndexWriterTitle.write(indexEntry);
 						titleCount++;
 						if(titleCount % 500 == 0) {
 							log.log(Level.FINE,"Processed {0} pages", titleCount);
@@ -204,14 +211,32 @@ class Indexer {
 				if(utf8Reader != null)
 					utf8Reader.close();
 			} catch (IOException e) {}
-			try {
-				if(fileIndex != null)
-					fileIndex.close();
-			} catch (IOException e) {}
-			try {
-				if(fileIndexBlock != null)
-					fileIndexBlock.close();
-			} catch (IOException e) {}
+			if(fileIndexWriterTitle != null)
+				fileIndexWriterTitle.close();
+			if(fileIndexWriterBlock != null)
+				fileIndexWriterBlock.close();
+		}
+
+		sortIndex();
+	}
+
+	public void sortIndex() {
+		// step2 mergesort partial indexes
+		IndexMerger<BlockPosition> im1 = null;
+		IndexMerger<TitlePosition> im2 = null;
+		try {
+			im1 = new IndexMerger<BlockPosition>(inputFile, "blockPos", 10000, comparatorBlockPosition, false);
+			im2 = new IndexMerger<TitlePosition>(inputFile, "titlePos", 10000, comparatorTitlePosition, false);
+			OfflineWiki.getInstance().getThreadPool().invokeAll(Arrays.asList(im1, im2));
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 }

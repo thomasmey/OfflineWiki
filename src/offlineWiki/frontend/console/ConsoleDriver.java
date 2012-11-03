@@ -1,3 +1,7 @@
+/*
+ * Copyright 2012 Thomas Meyer
+ */
+
 package offlineWiki.frontend.console;
 
 import java.io.Console;
@@ -41,8 +45,8 @@ public class ConsoleDriver implements Runnable {
 				wpSet = pageStore.getTitleAscending(searchArticle.substring(3,searchArticle.length()), 20);
 
 				// search >= key
-				for(int i=0;i< 20 && wpSet != null;i++) {
-					console.printf("Next key: %s", wpSet);
+				for(WikiPage page : wpSet) {
+					console.printf("Next key: %s", page);
 				}
 			} else {
 				wpSet = pageStore.getTitleAscending(searchArticle, 3);

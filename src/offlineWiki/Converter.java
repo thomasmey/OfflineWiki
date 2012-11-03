@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Thomas Meyer
+ * Copyright 2012 Thomas Meyer
  */
 
 package offlineWiki;

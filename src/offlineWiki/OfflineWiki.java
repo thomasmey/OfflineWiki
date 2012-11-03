@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Thomas Meyer
+ * Copyright 2012 Thomas Meyer
  */
 
 package offlineWiki;
@@ -42,9 +42,7 @@ public class OfflineWiki implements Runnable {
 
 	private OfflineWiki(String fileName) {
 		instance = this;
-		log = Logger.getAnonymousLogger();
-		log.setLevel(Level.ALL);
-//		log.setLevel(Level.INFO);
+		log = Logger.getLogger("mainLog");
 		threadPool = Executors.newCachedThreadPool();
 
 		xmlDumpFile = new File(fileName);
