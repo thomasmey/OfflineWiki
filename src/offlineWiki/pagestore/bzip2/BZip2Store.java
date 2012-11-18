@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+import javax.xml.stream.XMLStreamException;
+
 import common.io.objectstream.index.IndexReader;
 
 import offlineWiki.fileindex.entry.BlockPosition;
@@ -21,31 +23,32 @@ import offlineWiki.fileindex.entry.TitlePosition;
 import offlineWiki.pagestore.PageStore;
 
 import offlineWiki.OfflineWiki;
+import offlineWiki.PageRetriever;
 import offlineWiki.WikiPage;
 
 public class BZip2Store implements PageStore<WikiPage> {
 
+	private final Comparator<TitlePosition> comparatorTitlePosition;
+	private final Comparator<BlockPosition> comparatorBlockPosition;
+
 	private IndexReader<TitlePosition> titlePositionIndex;
 	private IndexReader<BlockPosition> blockPositionIndex;
-	private final Comparator<TitlePosition> comparatorTitlePosition = new ComparatorTitlePosition();
-	private final Comparator<BlockPosition> comparatorBlockPosition = new ComparatorBlockPosition();
 
 	public BZip2Store() {
+		comparatorTitlePosition = new ComparatorTitlePosition();
+		comparatorBlockPosition = new ComparatorBlockPosition();
 	}
 
 	@Override
-	public void commit() {
-		// TODO Auto-generated method stub
-	}
+	public void commit() { /* nop */ }
 
 	@Override
 	public void store(WikiPage wp) {
-		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
 	public void close() {
-		// TODO Auto-generated method stub
 	}
 
 	@Override
@@ -56,10 +59,8 @@ public class BZip2Store implements PageStore<WikiPage> {
 			titlePositionIndex = new IndexReader<TitlePosition>(baseFile, "titlePos", comparatorTitlePosition);
 			return true;
 		} catch (ClassNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} finally {}
 		return false;
@@ -77,16 +78,14 @@ public class BZip2Store implements PageStore<WikiPage> {
 		try {
 			if(pos < 0) {
 				// unexact match
-//				e = titlePositionIndex.getObjectAt(-pos);
+				e = titlePositionIndex.getObjectAt(-pos);
 			} else {
 				// exact match
 				e = titlePositionIndex.getObjectAt(pos);
 			}
 		} catch (ClassNotFoundException e1) {
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		} catch (IOException e1) {
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
 
@@ -95,11 +94,9 @@ public class BZip2Store implements PageStore<WikiPage> {
 			try {
 				e = titlePositionIndex.getNextObject();
 			} catch (ClassNotFoundException e1) {
-				// TODO Auto-generated catch block
 				e1.printStackTrace();
 				e = null;
 			} catch (IOException e1) {
-				// TODO Auto-generated catch block
 				e1.printStackTrace();
 				e = null;
 			}
@@ -109,18 +106,42 @@ public class BZip2Store implements PageStore<WikiPage> {
 		for(TitlePosition tp: listTitlePos) {
 			pos = blockPositionIndex.binarySearch(new BlockPosition(0, 0, tp.getPosition()));
 			BlockPosition b1 = null;
-			BlockPosition b2 = null;
 			try {
 				b1 = blockPositionIndex.getPreviousObjectAt(-pos);
-				b2 = blockPositionIndex.getNextObject();
 			} catch (ClassNotFoundException e1) {
-				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			} catch (IOException e1) {
-				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
-			System.out.println("titel= " + tp.getTitle() + " search pos: " + tp.getPosition() + " found b1= " + b1.getUncompressedPosition() + " b2= " + b2.getUncompressedPosition());
+
+			//open compressed bzip2 file and skip to the given block
+			File baseFile = OfflineWiki.getInstance().getXmlDumpFile();
+			PageRetriever pr = null;
+			BZip2RandomInputStream bzin = null;
+			WikiPage wp = null;
+			try {
+				bzin = new BZip2RandomInputStream(baseFile, b1.getBlockPosition());
+				// skip in the uncompressed output to the correct position
+				bzin.skip(tp.getPosition() - b1.getUncompressedPosition());
+				pr = new PageRetriever(bzin);
+				wp = pr.getNext();
+			} catch (IOException ex) {
+				ex.printStackTrace();
+			} catch (XMLStreamException ex) {
+				ex.printStackTrace();
+			} finally {
+				try {
+					if(pr != null)
+						pr.close();
+				} catch(IOException ex) {}
+				try {
+					if(pr != null)
+						bzin.close();
+				} catch(IOException ex) {}
+			}
+			if(wp != null) {
+				resultSet.add(wp);
+			}
 		}
 
 		return resultSet;

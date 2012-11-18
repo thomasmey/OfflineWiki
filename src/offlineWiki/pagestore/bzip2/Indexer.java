@@ -194,7 +194,6 @@ class Indexer implements Runnable {
 						titleCount++;
 						if(titleCount % 500 == 0) {
 							log.log(Level.FINE,"Processed {0} pages", titleCount);
-							System.out.println("Processed " +  titleCount + " pages");
 						}
 					}
 				}

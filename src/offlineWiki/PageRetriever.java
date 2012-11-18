@@ -17,7 +17,7 @@ import javax.xml.stream.XMLStreamReader;
 
 public class PageRetriever {
 
-	private final InputStream in;
+	private InputStream in;
 	private final Map<Integer,QName> levelNameMap;
 
 	private WikiPage.Builder currentPageBuilder;
@@ -76,10 +76,10 @@ public class PageRetriever {
 				QName levelPage = null;
 
 				if(level >= 2) {
-					levelPage = levelNameMap.get(2);
+					levelPage = levelNameMap.get(1);
 					if(levelPage.getLocalPart().equals("page")) {
 						QName levelSubPage;
-						if(level == 3) {
+						if(level == 2) {
 							levelSubPage = levelNameMap.get(level);
 							if(levelSubPage.getLocalPart().equals("title")) {
 								currentPageBuilder.setTitle(currentText);
@@ -87,7 +87,7 @@ public class PageRetriever {
 							if(levelSubPage.getLocalPart().equals("id")) {
 								currentPageBuilder.setId(Long.parseLong(currentText));
 							}
-						} else if (level == 4) {
+						} else if (level == 3) {
 							levelSubPage = levelNameMap.get(level);
 							if(levelSubPage.getLocalPart().equals("id")) {
 								currentPageBuilder.setRevisionId(Long.parseLong(currentText));
@@ -107,4 +107,10 @@ public class PageRetriever {
 
 		return null;
 	}
+
+	public void close() throws IOException {
+		in.close();
+		in = null;
+	}
+
 }

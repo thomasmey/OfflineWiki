@@ -49,14 +49,14 @@ public class ConsoleDriver implements Runnable {
 					console.printf("Next key: %s", page);
 				}
 			} else {
-				wpSet = pageStore.getTitleAscending(searchArticle, 3);
+				wpSet = pageStore.getTitleAscending(searchArticle, 1);
 
 				if(wpSet.size() == 0) {
-					console.printf("%s", "No matches found!");
+					console.printf("%s", "No matches found!\n");
 				} else {
 					WikiPage cwp = wpSet.first();
 					if(cwp.getTitle().equals(searchArticle)) {
-						System.out.println(cwp);
+						System.out.println(cwp.getText());
 					} else {
 						
 					}

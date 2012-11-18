@@ -52,7 +52,7 @@ public class Utf8Reader extends Reader {
 	private final InputStream in;
 
 	private static int timeDiff = -1;
-	private static int BUFFER_SIZE = 1024;
+	private static int BUFFER_SIZE = 64*1024;
 
 	public Utf8Reader(InputStream in) {
 		this.in = in;
@@ -143,7 +143,7 @@ public class Utf8Reader extends Reader {
 			return rc;
 
 		if(++currenFilePos % (1024*1024*128) == 0)
-			OfflineWiki.getInstance().getLogger().log(Level.FINE,"FilePos: " + currenFilePos);
+			OfflineWiki.getInstance().getLogger().log(Level.FINE,"FilePos {0} ", currenFilePos);
 		return rc;
 	}
 
@@ -158,9 +158,10 @@ public class Utf8Reader extends Reader {
 				int length = in.read(data);
 				Buffer b =  new Buffer(data, length);
 				long diff = System.nanoTime() - startTime;
-				if(timeDiff < 0 || diff < timeDiff) {
-					System.out.println("new buffer size = " + (BUFFER_SIZE *= 2) + " time diff was " + diff);
-				}
+//				if(timeDiff < 0 || diff < timeDiff) {
+//					BUFFER_SIZE *= 2;
+//					OfflineWiki.getInstance().getLogger().log(Level.FINE,"new buffer size = {0} time diff was {1} ns", new Object[] { BUFFER_SIZE, diff});
+//				}
 				return b;
 			}
 		};

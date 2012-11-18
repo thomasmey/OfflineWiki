@@ -4,11 +4,10 @@
 
 package offlineWiki;
 
-import java.io.Serializable;
 import java.util.Date;
 import java.util.List;
 
-public class WikiPage {
+public class WikiPage implements Comparable<WikiPage> {
 
 	private final String title;
 	private final long id;
@@ -69,7 +68,7 @@ public class WikiPage {
 		}
 	}
 
-	public WikiPage(Builder builder) {
+	private WikiPage(Builder builder) {
 		this.title = builder.title;
 		this.id = builder.id;
 		this.revId = builder.revId;
@@ -106,4 +105,15 @@ public class WikiPage {
 	public String getText() {
 		return text;
 	}
+
+	@Override
+	public int compareTo(WikiPage o) {
+		return title.compareTo(o.title);
+	}
+
+	@Override
+	public String toString() {
+		return "[" + title + "-" + id + "-" +revId + "]";
+	}
+
 }
