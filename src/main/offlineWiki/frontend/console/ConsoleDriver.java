@@ -33,7 +33,7 @@ public class ConsoleDriver implements Runnable {
 		}
 
 		String searchArticle = null;
-		SortedSet<WikiPage> wpSet = null;
+		SortedSet<String> wpSet = null;
 
 		// get first word
 		searchArticle = console.readLine("%s", "> ");
@@ -45,21 +45,17 @@ public class ConsoleDriver implements Runnable {
 				wpSet = pageStore.getTitleAscending(searchArticle.substring(3,searchArticle.length()), 20);
 
 				// search >= key
-				for(WikiPage page : wpSet) {
-					console.printf("Next key: %s", page);
+				for(String page : wpSet) {
+					console.printf("Next key: %s\n", page);
 				}
 			} else {
-				wpSet = pageStore.getTitleAscending(searchArticle, 1);
 
-				if(wpSet.size() == 0) {
+				WikiPage wp = pageStore.retrieveByTitel(searchArticle);
+
+				if(wp == null) {
 					console.printf("%s", "No matches found!\n");
 				} else {
-					WikiPage cwp = wpSet.first();
-					if(cwp.getTitle().equals(searchArticle)) {
-						System.out.println(cwp.getText());
-					} else {
-						
-					}
+					System.out.println(wp.getText());
 				}
 			}
 			// get next word

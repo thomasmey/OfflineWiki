@@ -33,6 +33,7 @@ public class BZip2Store implements PageStore<WikiPage> {
 
 	private IndexReader<TitlePosition> titlePositionIndex;
 	private IndexReader<BlockPosition> blockPositionIndex;
+	private BZip2RandomInputStream bzin;
 
 	public BZip2Store() {
 		comparatorTitlePosition = new ComparatorTitlePosition();
@@ -49,6 +50,10 @@ public class BZip2Store implements PageStore<WikiPage> {
 
 	@Override
 	public void close() {
+		try {
+			if(bzin != null)
+				bzin.close();
+		} catch(IOException ex) {}
 	}
 
 	@Override
@@ -57,6 +62,7 @@ public class BZip2Store implements PageStore<WikiPage> {
 			File baseFile = OfflineWiki.getInstance().getXmlDumpFile();
 			blockPositionIndex = new IndexReader<BlockPosition>(baseFile, "blockPos", comparatorBlockPosition);
 			titlePositionIndex = new IndexReader<TitlePosition>(baseFile, "titlePos", comparatorTitlePosition);
+			bzin = new BZip2RandomInputStream(baseFile);
 			return true;
 		} catch (ClassNotFoundException e) {
 			e.printStackTrace();
@@ -67,8 +73,8 @@ public class BZip2Store implements PageStore<WikiPage> {
 	}
 
 	@Override
-	public SortedSet<WikiPage> getTitleAscending(String title, int noMaxHits) {
-		SortedSet<WikiPage> resultSet = new TreeSet<WikiPage>();
+	public SortedSet<String> getTitleAscending(String title, int noMaxHits) {
+		SortedSet<String> resultSet = new TreeSet<String>();
 
 		// get titles and offsets in uncompressed stream
 		List<TitlePosition> listTitlePos = new ArrayList<TitlePosition>();
@@ -91,6 +97,8 @@ public class BZip2Store implements PageStore<WikiPage> {
 
 		for(int i = 0; i < noMaxHits && e != null; i++) {
 			listTitlePos.add(e);
+			resultSet.add(e.getTitle());
+
 			try {
 				e = titlePositionIndex.getNextObject();
 			} catch (ClassNotFoundException e1) {
@@ -102,48 +110,6 @@ public class BZip2Store implements PageStore<WikiPage> {
 			}
 		}
 
-		// get blockNo and compressed offset from uncompressed offsets
-		for(TitlePosition tp: listTitlePos) {
-			pos = blockPositionIndex.binarySearch(new BlockPosition(0, 0, tp.getPosition()));
-			BlockPosition b1 = null;
-			try {
-				b1 = blockPositionIndex.getPreviousObjectAt(-pos);
-			} catch (ClassNotFoundException e1) {
-				e1.printStackTrace();
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
-
-			//open compressed bzip2 file and skip to the given block
-			File baseFile = OfflineWiki.getInstance().getXmlDumpFile();
-			PageRetriever pr = null;
-			BZip2RandomInputStream bzin = null;
-			WikiPage wp = null;
-			try {
-				bzin = new BZip2RandomInputStream(baseFile, b1.getBlockPosition());
-				// skip in the uncompressed output to the correct position
-				bzin.skip(tp.getPosition() - b1.getUncompressedPosition());
-				pr = new PageRetriever(bzin);
-				wp = pr.getNext();
-			} catch (IOException ex) {
-				ex.printStackTrace();
-			} catch (XMLStreamException ex) {
-				ex.printStackTrace();
-			} finally {
-				try {
-					if(pr != null)
-						pr.close();
-				} catch(IOException ex) {}
-				try {
-					if(pr != null)
-						bzin.close();
-				} catch(IOException ex) {}
-			}
-			if(wp != null) {
-				resultSet.add(wp);
-			}
-		}
-
 		return resultSet;
 	}
 
@@ -151,6 +117,58 @@ public class BZip2Store implements PageStore<WikiPage> {
 	public void convert() {
 		Indexer indexer = new Indexer();
 		indexer.run();
+	}
+
+	@Override
+	public WikiPage retrieveByTitel(String title) {
+
+		// get title and offset in uncompressed stream
+		long pos = titlePositionIndex.binarySearch(new TitlePosition(title, 0, 0));
+		TitlePosition e = null;
+
+		try {
+			if(pos >= 0) {
+				// exact match
+				e = titlePositionIndex.getObjectAt(pos);
+			} else {
+				return null;
+			}
+		} catch (ClassNotFoundException e1) {
+			e1.printStackTrace();
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+
+		pos = blockPositionIndex.binarySearch(new BlockPosition(0, e.getPosition()));
+		BlockPosition b1 = null;
+		try {
+			b1 = blockPositionIndex.getPreviousObjectAt(-pos);
+		} catch (ClassNotFoundException e1) {
+			e1.printStackTrace();
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+
+		//skip in the compressed bzip2 file to the given block
+		PageRetriever pr = null;
+		WikiPage wp = null;
+		try {
+			bzin.skipToBlockAt(b1.getBlockPosition());
+			// skip in the uncompressed output to the correct position
+			bzin.skip(e.getPosition() - b1.getUncompressedPosition());
+			pr = new PageRetriever(bzin);
+			wp = pr.getNext();
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		} catch (XMLStreamException ex) {
+			ex.printStackTrace();
+		} finally {
+			try {
+				if(pr != null)
+					pr.close();
+			} catch(IOException ex) {}
+		}
+		return wp;
 	}
 
 }

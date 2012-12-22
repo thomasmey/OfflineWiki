@@ -12,6 +12,7 @@ public interface PageStore<T> {
 	void store(T wp);
 	void close();
 	boolean exists();
-	SortedSet<T> getTitleAscending(String title, int noMaxHits);
+	SortedSet<String> getTitleAscending(String title, int noMaxHits);
+	T retrieveByTitel(String title);
 	void convert();
 }

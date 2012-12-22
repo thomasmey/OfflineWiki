@@ -23,15 +23,18 @@ import offlineWiki.fileindex.entry.BlockPosition;
 import offlineWiki.fileindex.entry.ComparatorBlockPosition;
 import offlineWiki.fileindex.entry.ComparatorTitlePosition;
 import offlineWiki.fileindex.entry.TitlePosition;
+import offlineWiki.utility.HtmlUtility;
 
 import org.apache.commons.compress.compressors.CompressorInputStream;
-import org.apache.commons.compress.compressors.bzip2.BZip2BlockListener;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
+import org.apache.commons.compress.compressors.bzip2.BZip2NewBlockListener;
 
 import common.io.objectstream.index.IndexMerger;
 import common.io.objectstream.index.IndexWriter;
 
 class Indexer implements Runnable {
+	private static final int XML_BUFFER_SIZE = 1024*1024*16;
+
 	private final File inputFile;
 	private final Logger log;
 
@@ -54,7 +57,7 @@ class Indexer implements Runnable {
 		Map<Integer,StringBuilder> levelNameMap = new HashMap<Integer,StringBuilder>();
 
 		StringBuilder sbElement = null;
-		int[] sbChar = new int[1024*1024*16];
+		char[] sbChar = new char[XML_BUFFER_SIZE];
 		int sbCharPos = 0;
 		long currentTagPos = 0;
 		int currentMode = 0;
@@ -68,16 +71,26 @@ class Indexer implements Runnable {
 		try {
 			if(inputFile.getName().endsWith(".bz2")) {
 
-				class BlockListener implements BZip2BlockListener {
+				class BlockListener implements BZip2NewBlockListener {
 
+					private int blockCount;
 					private final IndexWriter<BlockPosition> fileIndex;
+
 					public BlockListener(IndexWriter<BlockPosition> fileIndexBlock) {
 						fileIndex = fileIndexBlock;
 					}
 
 					@Override
-					public void newBlock(CompressorInputStream in, long currBlockNo, long currBlockPosition) {
-						fileIndex.write(new BlockPosition(currBlockNo, currBlockPosition, in.getBytesRead()));
+					public void newBlock(CompressorInputStream in, long currBlockPosition) {
+						long currentFilePos = in.getBytesRead();
+						fileIndex.write(new BlockPosition(currBlockPosition, currentFilePos));
+
+						//inform about progress
+						if(blockCount % 100 == 0) {
+							OfflineWiki.getInstance().getLogger().log(Level.INFO,"Bzip2 block no. {2} at {0} uncompressed at {1}", new Object[] {currBlockPosition / 8, currentFilePos, blockCount});
+						}
+
+						blockCount++;
 					}
 				}
 
@@ -108,7 +121,7 @@ class Indexer implements Runnable {
 						currentMode = 1;
 						break;
 					}
-					sbChar[sbCharPos] = currentChar;
+					sbChar[sbCharPos] = (char) currentChar;
 					sbCharPos++;
 					if(sbCharPos > sbChar.length) {
 						log.log(Level.SEVERE,"Error! Buffer full!");
@@ -188,7 +201,7 @@ class Indexer implements Runnable {
 						for(int i=0; i< sbCharPos; i++) {
 							sb.appendCodePoint(sbChar[i]);
 						}
-						String title = sb.toString();
+						String title = HtmlUtility.decodeEntities(sb);
 						TitlePosition indexEntry = new TitlePosition(title, currentTagPos, 0);
 						fileIndexWriterTitle.write(indexEntry);
 						titleCount++;

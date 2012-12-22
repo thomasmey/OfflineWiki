@@ -12,6 +12,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import offlineWiki.frontend.console.ConsoleDriver;
+import offlineWiki.frontend.swing.SwingDriver;
 import offlineWiki.pagestore.PageStore;
 import offlineWiki.pagestore.bzip2.BZip2Store;
 
@@ -33,7 +34,7 @@ public class OfflineWiki implements Runnable {
 	public static void main(String[] args) {
 
 		if(args.length < 1) {
-			System.err.println("arg[0]=filename of uncompressed xml dump missing!");
+			System.err.println("arg[0] = filename of uncompressed xml dump missing!");
 			System.exit(4);
 		}
 
@@ -49,10 +50,12 @@ public class OfflineWiki implements Runnable {
 		pageStore = new BZip2Store();
 
 		if (!pageStore.exists()) {
+			log.log(Level.INFO, "Creating index files. Sadly this takes very long, please be patient!");
 			pageStore.convert();
 		}
 
 		interactionDriver = new ConsoleDriver();
+//		interactionDriver = new SwingDriver();
 	}
 
 	public static OfflineWiki getInstance() {

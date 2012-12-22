@@ -13,27 +13,21 @@ public class BlockPosition implements Serializable {
 	 */
 	private static final long serialVersionUID = 1L;
 
-	private final long blockNo;
-	private final long blockPosition;
+	private final long blockPositionInBits;
 	private final long uncompressedPosition;
 
-	public BlockPosition(long currBlockNo, long currBlockPosition, long currStreamPosition) {
-		blockNo = currBlockNo;
-		blockPosition = currBlockPosition;
+	public BlockPosition(long currBlockPositionInBits, long currStreamPosition) {
+		blockPositionInBits = currBlockPositionInBits;
 		uncompressedPosition = currStreamPosition;
 	}
 
 	@Override
 	public String toString() {
-		return "" + '[' + blockNo + '-' + blockPosition + '-' + uncompressedPosition + ']'; 
-	}
-
-	public long getBlockNo() {
-		return blockNo;
+		return "" + '[' + blockPositionInBits + '-' + uncompressedPosition + ']'; 
 	}
 
 	public long getBlockPosition() {
-		return blockPosition;
+		return blockPositionInBits;
 	}
 
 	public long getUncompressedPosition() {

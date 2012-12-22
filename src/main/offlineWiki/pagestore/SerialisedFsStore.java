@@ -95,7 +95,7 @@ class SerialisedFsStore implements PageStore<WikiPage> {
 	}
 
 	@Override
-	public SortedSet<WikiPage> getTitleAscending(String title, int noMaxHits) {
+	public SortedSet<String> getTitleAscending(String title, int noMaxHits) {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -110,6 +110,12 @@ class SerialisedFsStore implements PageStore<WikiPage> {
 	public void convert() {
 		// TODO Auto-generated method stub
 		
+	}
+
+	@Override
+	public WikiPage retrieveByTitel(String title) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 }
