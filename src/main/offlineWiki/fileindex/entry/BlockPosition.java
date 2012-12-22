@@ -17,6 +17,9 @@ public class BlockPosition implements Serializable {
 	private final long uncompressedPosition;
 
 	public BlockPosition(long currBlockPositionInBits, long currStreamPosition) {
+		if(currBlockPositionInBits < 0 || currStreamPosition < 0)
+			throw new IllegalArgumentException("" + currBlockPositionInBits + '-' + currStreamPosition);
+
 		blockPositionInBits = currBlockPositionInBits;
 		uncompressedPosition = currStreamPosition;
 	}

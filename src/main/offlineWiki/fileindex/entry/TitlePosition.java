@@ -15,7 +15,6 @@ public class TitlePosition implements Serializable {
 
 	private final String title;
 	private final long position;
-	private final long blockNo;
 
 	@Override
 	public int hashCode() {
@@ -24,7 +23,7 @@ public class TitlePosition implements Serializable {
 
 	@Override
 	public String toString() {
-		return '[' + title + '-' + position + '-' + blockNo + ']';
+		return '[' + title + '-' + position + ']';
 	}
 
 	public long getPosition() {
@@ -35,16 +34,18 @@ public class TitlePosition implements Serializable {
 	public boolean equals(Object obj) {
 		if(obj instanceof TitlePosition) {
 			TitlePosition pos = (TitlePosition) obj;
-			return title.equals(pos.title) && position == pos.position && blockNo == pos.blockNo;
+			return title.equals(pos.title) && position == pos.position;
 		}
 		return false;
 	}
 
-	public TitlePosition(String title, long position, long blockNo) {
-		super();
+	public TitlePosition(String title, long position) {
+
+		if(position < 0 || title == null)
+			throw new IllegalArgumentException(title + '-' + position);
+
 		this.title = title;
 		this.position = position;
-		this.blockNo = blockNo;
 	}
 
 	public String getTitle() {

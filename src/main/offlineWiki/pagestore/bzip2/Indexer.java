@@ -202,7 +202,7 @@ class Indexer implements Runnable {
 							sb.appendCodePoint(sbChar[i]);
 						}
 						String title = HtmlUtility.decodeEntities(sb);
-						TitlePosition indexEntry = new TitlePosition(title, currentTagPos, 0);
+						TitlePosition indexEntry = new TitlePosition(title, currentTagPos);
 						fileIndexWriterTitle.write(indexEntry);
 						titleCount++;
 						if(titleCount % 500 == 0) {

@@ -78,7 +78,7 @@ public class BZip2Store implements PageStore<WikiPage> {
 
 		// get titles and offsets in uncompressed stream
 		List<TitlePosition> listTitlePos = new ArrayList<TitlePosition>();
-		long pos = titlePositionIndex.binarySearch(new TitlePosition(title, 0, 0));
+		long pos = titlePositionIndex.binarySearch(new TitlePosition(title, 0));
 		TitlePosition e = null;
 
 		try {
@@ -123,7 +123,7 @@ public class BZip2Store implements PageStore<WikiPage> {
 	public WikiPage retrieveByTitel(String title) {
 
 		// get title and offset in uncompressed stream
-		long pos = titlePositionIndex.binarySearch(new TitlePosition(title, 0, 0));
+		long pos = titlePositionIndex.binarySearch(new TitlePosition(title, 0));
 		TitlePosition e = null;
 
 		try {

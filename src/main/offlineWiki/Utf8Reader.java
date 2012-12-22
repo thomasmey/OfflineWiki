@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.nio.ByteBuffer;
-import java.util.logging.Level;
 
 public class Utf8Reader extends Reader {
 
@@ -91,22 +90,21 @@ public class Utf8Reader extends Reader {
 	private void fillBuffer() {
 
 		byteBuffer.rewind();
-		while(byteBuffer.hasRemaining()) {
-			int b;
-			try {
-				b = in.read();
-			} catch (IOException e) {
-				e.printStackTrace();
-				b = -1;
-			}
+		byte[] ba = byteBuffer.array();
 
-			if(b < 0) {
-				byteBufferEOF = true;
-				break;
-			}
-			byteBuffer.put((byte) b);
+		int len = 0;
+		try {
+			len = in.read(ba);
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
-		byteBuffer.flip();
+
+		if(len < 0) {
+			byteBufferEOF = true;
+		}
+		else {
+			byteBuffer.limit(len);
+		}
 	}
 
 	// we need to do the buffering ourself
@@ -125,6 +123,7 @@ public class Utf8Reader extends Reader {
 			}
 		}
 
+		currentFilePos++;
 		return rc;
 	}
 }
