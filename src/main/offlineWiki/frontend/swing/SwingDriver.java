@@ -5,10 +5,11 @@
 package offlineWiki.frontend.swing;
 
 import java.awt.EventQueue;
+import java.util.logging.Level;
 
 import javax.swing.SwingUtilities;
 
-import offlineWiki.frontend.console.MainWindow;
+import offlineWiki.OfflineWiki;
 
 public class SwingDriver implements Runnable {
 
@@ -18,8 +19,16 @@ public class SwingDriver implements Runnable {
 
 			@Override
 			public void run() {
-				MainWindow mw = new MainWindow();
-				mw.pack();
+				EventQueue.invokeLater(new Runnable() {
+					public void run() {
+						try {
+							SearchWindow frame = new SearchWindow();
+							frame.setVisible(true);
+						} catch (Exception e) {
+							OfflineWiki.getInstance().getLogger().log(Level.SEVERE,"Error in main window!", e);
+						}
+					}
+				});
 			}
 		});
 	}

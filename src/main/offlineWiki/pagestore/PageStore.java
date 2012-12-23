@@ -4,7 +4,7 @@
 
 package offlineWiki.pagestore;
 
-import java.util.SortedSet;
+import java.util.List;
 
 public interface PageStore<T> {
 
@@ -12,7 +12,9 @@ public interface PageStore<T> {
 	void store(T wp);
 	void close();
 	boolean exists();
-	SortedSet<String> getTitleAscending(String title, int noMaxHits);
+
+	/** list must be sorted ascending */
+	List<String> getTitleAscending(String title, int noMaxHits);
 	T retrieveByTitel(String title);
 	void convert();
 }

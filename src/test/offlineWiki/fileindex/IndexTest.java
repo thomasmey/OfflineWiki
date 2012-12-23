@@ -54,6 +54,25 @@ public class IndexTest {
 	}
 
 	@Test
+	public void readIndexPartRaw() throws ClassNotFoundException, IOException {
+		ObjectInputStream in = new ObjectInputStream(new BufferedInputStream(new FileInputStream(new File(dataFileName + '.' + titlePosIndexName + ".index.0"))));
+
+		int objCount = 0;
+		try {
+			TitlePosition titlePosition = (TitlePosition) in.readObject();
+			while(titlePosition != null) {
+				objCount++;
+				titlePosition = (TitlePosition) in.readObject();
+			}
+		} catch(EOFException e) {}
+		finally {
+			in.close();
+		}
+
+		System.out.println("Object count= " + objCount);
+	}
+
+	@Test
 	public void readCompleteIndexRaw() throws ClassNotFoundException, IOException {
 		ObjectInputStream in = new ObjectInputStream(new BufferedInputStream(new FileInputStream(new File(dataFileName + '.' + titlePosIndexName + ".index"))));
 

@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import offlineWiki.frontend.StdInOutDriver;
 import offlineWiki.frontend.console.ConsoleDriver;
 import offlineWiki.frontend.swing.SwingDriver;
 import offlineWiki.pagestore.PageStore;
@@ -54,8 +55,9 @@ public class OfflineWiki implements Runnable {
 			pageStore.convert();
 		}
 
-		interactionDriver = new ConsoleDriver();
-//		interactionDriver = new SwingDriver();
+//		interactionDriver = new ConsoleDriver();
+//		interactionDriver = new StdInOutDriver();
+		interactionDriver = new SwingDriver();
 	}
 
 	public static OfflineWiki getInstance() {

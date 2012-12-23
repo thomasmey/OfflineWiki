@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.SortedSet;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
@@ -95,7 +94,7 @@ class SerialisedFsStore implements PageStore<WikiPage> {
 	}
 
 	@Override
-	public SortedSet<String> getTitleAscending(String title, int noMaxHits) {
+	public List<String> getTitleAscending(String title, int noMaxHits) {
 		// TODO Auto-generated method stub
 		return null;
 	}

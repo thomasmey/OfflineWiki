@@ -9,8 +9,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.SortedSet;
-import java.util.TreeSet;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -73,8 +71,8 @@ public class BZip2Store implements PageStore<WikiPage> {
 	}
 
 	@Override
-	public SortedSet<String> getTitleAscending(String title, int noMaxHits) {
-		SortedSet<String> resultSet = new TreeSet<String>();
+	public List<String> getTitleAscending(String title, int noMaxHits) {
+		List<String> resultSet = new ArrayList<String>();
 
 		// get titles and offsets in uncompressed stream
 		List<TitlePosition> listTitlePos = new ArrayList<TitlePosition>();
@@ -117,6 +115,9 @@ public class BZip2Store implements PageStore<WikiPage> {
 	public void convert() {
 		Indexer indexer = new Indexer();
 		indexer.run();
+
+		// open index files after index creation
+		exists();
 	}
 
 	@Override

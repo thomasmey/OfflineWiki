@@ -5,7 +5,7 @@
 package offlineWiki.pagestore;
 
 import java.io.File;
-import java.util.SortedSet;
+import java.util.List;
 
 import offlineWiki.OfflineWiki;
 import offlineWiki.WikiPage;
@@ -80,7 +80,7 @@ class OdbStore implements PageStore<WikiPage> {
 	}
 
 	@Override
-	public SortedSet<WikiPage> getTitleAscending(String title, int noMaxHits) {
+	public List<String> getTitleAscending(String title, int noMaxHits) {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -95,6 +95,12 @@ class OdbStore implements PageStore<WikiPage> {
 	public void convert() {
 		// TODO Auto-generated method stub
 		
+	}
+
+	@Override
+	public WikiPage retrieveByTitel(String title) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 }

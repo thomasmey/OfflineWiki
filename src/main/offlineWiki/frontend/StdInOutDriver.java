@@ -1,24 +1,21 @@
-/*
- * Copyright 2012 Thomas Meyer
- */
+package offlineWiki.frontend;
 
-package offlineWiki.frontend.console;
-
-import java.io.Console;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.List;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import offlineWiki.OfflineWiki;
 import offlineWiki.WikiPage;
 import offlineWiki.pagestore.PageStore;
 
-public class ConsoleDriver implements Runnable {
-
+public class StdInOutDriver implements Runnable {
+	
 	private final PageStore<WikiPage> pageStore;
 	private final Logger log;
 
-	public ConsoleDriver() {
+	public StdInOutDriver() {
 		this.pageStore = OfflineWiki.getInstance().getPageStore();
 		this.log = OfflineWiki.getInstance().getLogger();
 	}
@@ -26,17 +23,17 @@ public class ConsoleDriver implements Runnable {
 	@Override
 	public void run() {
 
-		Console console = System.console();
-		if(console == null) {
-			log.log(Level.SEVERE,"Failed to grab console!\n");
-			return;
-		}
-
 		String searchArticle = null;
 		List<String> wpSet = null;
 
+		BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+
 		// get first word
-		searchArticle = console.readLine("%s", "> ");
+		try {
+			searchArticle = in.readLine();
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
 
 		while (searchArticle != null) {
 
@@ -46,21 +43,26 @@ public class ConsoleDriver implements Runnable {
 
 				// search >= key
 				for(String page : wpSet) {
-					console.printf("Next key: %s\n", page);
+					System.out.printf("Next key: %s\n", page);
 				}
 			} else {
 
 				WikiPage wp = pageStore.retrieveByTitel(searchArticle);
 
 				if(wp == null) {
-					console.printf("%s", "No matches found!\n");
+					System.out.printf("%s", "No matches found!\n");
 				} else {
-					console.printf("%s", wp.getText());
+					System.out.println(wp.getText());
 				}
 			}
 
 			// get next word
-			searchArticle = console.readLine("%s", "> ");
+			try {
+				searchArticle = in.readLine();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 	}
+
 }
