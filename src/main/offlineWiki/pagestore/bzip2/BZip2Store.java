@@ -74,41 +74,46 @@ public class BZip2Store implements PageStore<WikiPage> {
 	public List<String> getTitleAscending(String title, int noMaxHits) {
 		List<String> resultSet = new ArrayList<String>();
 
-		// get titles and offsets in uncompressed stream
-		List<TitlePosition> listTitlePos = new ArrayList<TitlePosition>();
-		long pos = titlePositionIndex.binarySearch(new TitlePosition(title, 0));
-		TitlePosition e = null;
+		long pos;
+		List<TitlePosition> listTitlePos;
+		synchronized (titlePositionIndex) {
+			// get titles and offsets in uncompressed stream
+			listTitlePos = new ArrayList<TitlePosition>();
+			pos = titlePositionIndex.binarySearch(new TitlePosition(title, 0));
 
-		try {
-			if(pos < 0) {
-				// unexact match
-				e = titlePositionIndex.getObjectAt(-pos);
-			} else {
-				// exact match
-				e = titlePositionIndex.getObjectAt(pos);
-			}
-		} catch (ClassNotFoundException e1) {
-			e1.printStackTrace();
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
-
-		for(int i = 0; i < noMaxHits && e != null; i++) {
-			listTitlePos.add(e);
-			resultSet.add(e.getTitle());
+			TitlePosition e = null;
 
 			try {
-				e = titlePositionIndex.getNextObject();
+				if(pos < 0) {
+					// unexact match
+					e = titlePositionIndex.getObjectAt(-pos);
+				} else {
+					// exact match
+					e = titlePositionIndex.getObjectAt(pos);
+				}
 			} catch (ClassNotFoundException e1) {
 				e1.printStackTrace();
-				e = null;
 			} catch (IOException e1) {
 				e1.printStackTrace();
-				e = null;
 			}
-		}
 
-		return resultSet;
+			for(int i = 0; i < noMaxHits && e != null; i++) {
+				listTitlePos.add(e);
+				resultSet.add(e.getTitle());
+
+				try {
+					e = titlePositionIndex.getNextObject();
+				} catch (ClassNotFoundException e1) {
+					e1.printStackTrace();
+					e = null;
+				} catch (IOException e1) {
+					e1.printStackTrace();
+					e = null;
+				}
+			}
+
+			return resultSet;
+		}
 	}
 
 	@Override
@@ -123,53 +128,60 @@ public class BZip2Store implements PageStore<WikiPage> {
 	@Override
 	public WikiPage retrieveByTitel(String title) {
 
-		// get title and offset in uncompressed stream
-		long pos = titlePositionIndex.binarySearch(new TitlePosition(title, 0));
+		long pos;
 		TitlePosition e = null;
+		synchronized (titlePositionIndex) {
+			// get title and offset in uncompressed stream
+			pos = titlePositionIndex.binarySearch(new TitlePosition(title, 0));
 
-		try {
-			if(pos >= 0) {
-				// exact match
-				e = titlePositionIndex.getObjectAt(pos);
-			} else {
-				return null;
-			}
-		} catch (ClassNotFoundException e1) {
-			e1.printStackTrace();
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
-
-		pos = blockPositionIndex.binarySearch(new BlockPosition(0, e.getPosition()));
-		BlockPosition b1 = null;
-		try {
-			b1 = blockPositionIndex.getPreviousObjectAt(-pos);
-		} catch (ClassNotFoundException e1) {
-			e1.printStackTrace();
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
-
-		//skip in the compressed bzip2 file to the given block
-		PageRetriever pr = null;
-		WikiPage wp = null;
-		try {
-			bzin.skipToBlockAt(b1.getBlockPosition());
-			// skip in the uncompressed output to the correct position
-			bzin.skip(e.getPosition() - b1.getUncompressedPosition());
-			pr = new PageRetriever(bzin);
-			wp = pr.getNext();
-		} catch (IOException ex) {
-			ex.printStackTrace();
-		} catch (XMLStreamException ex) {
-			ex.printStackTrace();
-		} finally {
 			try {
-				if(pr != null)
-					pr.close();
-			} catch(IOException ex) {}
+				if(pos >= 0) {
+					// exact match
+					e = titlePositionIndex.getObjectAt(pos);
+				} else {
+					return null;
+				}
+			} catch (ClassNotFoundException e1) {
+				e1.printStackTrace();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
 		}
-		return wp;
+
+		BlockPosition b1 = null;
+		synchronized (blockPositionIndex) {
+			pos = blockPositionIndex.binarySearch(new BlockPosition(0, e.getPosition()));
+			try {
+				b1 = blockPositionIndex.getPreviousObjectAt(-pos);
+			} catch (ClassNotFoundException e1) {
+				e1.printStackTrace();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+		}
+
+		synchronized (bzin) {
+			//skip in the compressed bzip2 file to the given block
+			PageRetriever pr = null;
+			WikiPage wp = null;
+			try {
+				bzin.skipToBlockAt(b1.getBlockPosition());
+				// skip in the uncompressed output to the correct position
+				bzin.skip(e.getPosition() - b1.getUncompressedPosition());
+				pr = new PageRetriever(bzin);
+				wp = pr.getNext();
+			} catch (IOException ex) {
+				ex.printStackTrace();
+			} catch (XMLStreamException ex) {
+				ex.printStackTrace();
+			} finally {
+				try {
+					if(pr != null)
+						pr.close();
+				} catch(IOException ex) {}
+			}
+			return wp;
+		}
 	}
 
 }

@@ -1,9 +1,12 @@
 package offlineWiki.frontend.swing;
 
 import java.awt.BorderLayout;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.JTextPane;
 
@@ -12,7 +15,10 @@ import javax.swing.JScrollPane;
 
 public class WikiPageWindow extends JFrame {
 
-	private JPanel contentPane;
+	private final JPanel contentPane;
+	private final JScrollPane scrollPane;
+	private final JTextPane textPane;
+
 	private final WikiPage page;
 
 	/**
@@ -30,15 +36,39 @@ public class WikiPageWindow extends JFrame {
 		contentPane.setLayout(new BorderLayout(0, 0));
 		setContentPane(contentPane);
 
-		JScrollPane scrollPane = new JScrollPane();
+		scrollPane = new JScrollPane();
 		contentPane.add(scrollPane, BorderLayout.CENTER);
 
-		JTextPane textPane = new JTextPane();
+		textPane = new JTextPane();
 		textPane.setEditable(false);
 		String text = page.getText();
 		textPane.setText(text);
 
-		scrollPane.setViewportView(textPane);
+		// reset scroll bars...
+		SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				scrollPane.setViewportView(textPane);
+				int miny = scrollPane.getVerticalScrollBar().getMinimum();
+				scrollPane.getVerticalScrollBar().setValue(miny);
+				int minx = scrollPane.getHorizontalScrollBar().getMinimum();
+				scrollPane.getHorizontalScrollBar().setValue(minx);
+			}
+		});
+
+		textPane.addKeyListener(new KeyAdapter() {
+
+			@Override
+			public void keyReleased(KeyEvent e) {
+				if(e.isConsumed())
+					return;
+
+				if(e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+					WikiPageWindow.this.dispose();
+					e.consume();
+				}
+			}
+		});
 	}
 
 }

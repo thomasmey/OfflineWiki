@@ -6,8 +6,10 @@ package offlineWiki;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -24,6 +26,7 @@ public class OfflineWiki implements Runnable {
 	private final ExecutorService threadPool;
 	private final Logger log;
 	private final Runnable interactionDriver;
+	private final CountDownLatch interactionDriverLatch;
 	private static OfflineWiki instance;
 
 	/**
@@ -55,9 +58,11 @@ public class OfflineWiki implements Runnable {
 			pageStore.convert();
 		}
 
+		interactionDriverLatch = new CountDownLatch(1);
+
 //		interactionDriver = new ConsoleDriver();
 //		interactionDriver = new StdInOutDriver();
-		interactionDriver = new SwingDriver();
+		interactionDriver = new SwingDriver(interactionDriverLatch);
 	}
 
 	public static OfflineWiki getInstance() {
@@ -83,6 +88,15 @@ public class OfflineWiki implements Runnable {
 	@Override
 	public void run() {
 		threadPool.execute(interactionDriver);
+
+		// wait for interaction driver to finish
+		try {
+			interactionDriverLatch.await();
+		} catch (InterruptedException e) {
+			log.log(Level.SEVERE, "wait for interaction driver to finish was interruppted!", e);
+		}
+
+		// shutdown pool
 		threadPool.shutdown();
 		threadPool.shutdownNow();
 	}

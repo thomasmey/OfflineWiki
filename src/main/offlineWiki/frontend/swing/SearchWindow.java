@@ -1,7 +1,6 @@
 package offlineWiki.frontend.swing;
 
 import java.awt.BorderLayout;
-import java.awt.Point;
 
 import javax.swing.JFrame;
 import javax.swing.JPanel;
@@ -12,6 +11,10 @@ import javax.swing.JList;
 
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
+
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 
@@ -20,6 +23,7 @@ import offlineWiki.WikiPage;
 
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.concurrent.CountDownLatch;
 
 public class SearchWindow extends JFrame {
 
@@ -27,17 +31,32 @@ public class SearchWindow extends JFrame {
 	private final JTextField searchField;
 	private final JList<String> searchResultList;
 	private final SearchResultListModel searchResultListModel;
+	private final CountDownLatch countDownLatch;
+	private final JScrollPane scrollPane;
+
 	private JScrollBar scrollBar;
-	private JScrollPane scrollPane;
 
 	/**
 	 * Create the frame.
 	 */
-	public SearchWindow() {
+	public SearchWindow(CountDownLatch countDownLatch) {
+
+		super();
+
+		this.countDownLatch = countDownLatch;
+
 		setTitle("Search");
 		this.searchResultListModel = new SearchResultListModel();
 
-		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+		addWindowListener(new WindowAdapter() {
+
+			@Override
+			public void windowClosed(WindowEvent e) {
+				SearchWindow.this.countDownLatch.countDown();
+			}
+		});
+
 		setBounds(100, 100, 450, 300);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
@@ -48,16 +67,24 @@ public class SearchWindow extends JFrame {
 		searchField.addKeyListener(new KeyAdapter() {
 			@Override
 			public void keyTyped(KeyEvent e) {
-				if(!e.isActionKey()) {
+				if(e.isConsumed())
+					return;
+
+				if(e.getKeyChar() != '\n') {
+
 					SwingUtilities.invokeLater(new Runnable() {
 
 						@Override
 						public void run() {
-							searchResultListModel.updateSearchResultList(searchField.getText());
+							String searchText = searchField.getText();
+							searchResultListModel.updateSearchResultList(searchText);
+//							int min = scrollPane.getVerticalScrollBar().getMinimum();
+//							scrollPane.getVerticalScrollBar().setValue(min);
+							searchResultList.setSelectedValue(searchText, true);
 						}
 					});
 				} else {
-					searchResultList.transferFocus();
+					searchField.transferFocus();
 				}
 			}
 		});
@@ -70,25 +97,55 @@ public class SearchWindow extends JFrame {
 			@Override
 			public void mouseClicked(MouseEvent e) {
 				if(e.getClickCount() == 2) {
-					Point p = e.getPoint();
-					final String title = searchResultList.getSelectedValue();
-					SwingUtilities.invokeLater(new Runnable() {
-
-						@Override
-						public void run() {
-							WikiPage page = OfflineWiki.getInstance().getPageStore().retrieveByTitel(title);
-							WikiPageWindow window = new WikiPageWindow(page);
-							window.setVisible(true);
-						}
-						
-					});
+					String title = searchResultList.getSelectedValue();
+					OfflineWiki.getInstance().getThreadPool().execute(new ResultViewer(title));
+					e.consume();
 				}
 			}
 		});
+
+		searchResultList.addKeyListener(new KeyAdapter() {
+
+			@Override
+			public void keyTyped(KeyEvent e) {
+				if(e.isConsumed())
+					return;
+
+				char keyChar = e.getKeyChar();
+				if(keyChar == '\n' || keyChar == ' ') {
+					String title = searchResultList.getSelectedValue();
+					OfflineWiki.getInstance().getThreadPool().execute(new ResultViewer(title));
+					e.consume();
+				}
+			}
+		});
+
 		searchResultList.setModel(searchResultListModel);
 
 		scrollPane = new JScrollPane(searchResultList);
 		contentPane.add(scrollPane, BorderLayout.CENTER);
+	}
+}
+
+/** retrieves a WikiPage and displays the result, can run on any thread */
+class ResultViewer implements Runnable {
+
+	private final String title;
+	public ResultViewer(String title) {
+		this.title = title;
+	}
+
+	@Override
+	public void run() {
+		final WikiPage page = OfflineWiki.getInstance().getPageStore().retrieveByTitel(title);
+		SwingUtilities.invokeLater(new Runnable() {
+			
+			@Override
+			public void run() {
+				WikiPageWindow window = new WikiPageWindow(page);
+				window.setVisible(true);
+			}
+		});
 	}
 
 }
