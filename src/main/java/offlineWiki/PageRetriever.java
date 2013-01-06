@@ -4,6 +4,7 @@
 
 package offlineWiki;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -15,7 +16,7 @@ import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
-public class PageRetriever {
+public class PageRetriever implements Closeable {
 
 	private InputStream in;
 	private final Map<Integer,QName> levelNameMap;

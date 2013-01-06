@@ -13,7 +13,6 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.event.WindowListener;
 
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
@@ -70,7 +69,7 @@ public class SearchWindow extends JFrame {
 				if(e.isConsumed())
 					return;
 
-				if(e.getKeyChar() != '\n') {
+				if(e.getKeyChar() == '\n') {
 
 					SwingUtilities.invokeLater(new Runnable() {
 
@@ -83,8 +82,8 @@ public class SearchWindow extends JFrame {
 							searchResultList.setSelectedValue(searchText, true);
 						}
 					});
-				} else {
 					searchField.transferFocus();
+					e.consume();
 				}
 			}
 		});
@@ -137,7 +136,7 @@ class ResultViewer implements Runnable {
 
 	@Override
 	public void run() {
-		final WikiPage page = OfflineWiki.getInstance().getPageStore().retrieveByTitel(title);
+		final WikiPage page = OfflineWiki.getInstance().getPageStore().retrieveByIndexKey(title);
 		SwingUtilities.invokeLater(new Runnable() {
 			
 			@Override

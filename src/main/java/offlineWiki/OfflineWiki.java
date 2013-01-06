@@ -9,19 +9,16 @@ import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import offlineWiki.frontend.StdInOutDriver;
-import offlineWiki.frontend.console.ConsoleDriver;
 import offlineWiki.frontend.swing.SwingDriver;
-import offlineWiki.pagestore.PageStore;
+import offlineWiki.pagestore.Store;
 import offlineWiki.pagestore.bzip2.BZip2Store;
 
 public class OfflineWiki implements Runnable {
 
-	private final PageStore<WikiPage> pageStore;
+	private final Store<WikiPage, String> pageStore;
 	private final File xmlDumpFile;
 	private final ExecutorService threadPool;
 	private final Logger log;
@@ -45,18 +42,13 @@ public class OfflineWiki implements Runnable {
 		new OfflineWiki(args[0]).run();
 	}
 
-	private OfflineWiki(String fileName) {
+	public OfflineWiki(String fileName) {
 		instance = this;
 		log = Logger.getLogger("mainLog");
 		threadPool = Executors.newCachedThreadPool();
 
 		xmlDumpFile = new File(fileName);
 		pageStore = new BZip2Store();
-
-		if (!pageStore.exists()) {
-			log.log(Level.INFO, "Creating index files. Sadly this takes very long, please be patient!");
-			pageStore.convert();
-		}
 
 		interactionDriverLatch = new CountDownLatch(1);
 
@@ -69,7 +61,7 @@ public class OfflineWiki implements Runnable {
 		return instance;
 	}
 
-	public PageStore<WikiPage> getPageStore() {
+	public Store<WikiPage, String> getPageStore() {
 		return pageStore;
 	}
 
@@ -81,12 +73,15 @@ public class OfflineWiki implements Runnable {
 		return threadPool;
 	}
 
-	public Logger getLogger() {
-		return log;
-	}
-
 	@Override
 	public void run() {
+
+		if (!pageStore.exists()) {
+			log.log(Level.INFO, "Creating index files. Sadly this takes very long, please be patient!");
+			pageStore.convert();
+		}
+		pageStore.open();
+
 		threadPool.execute(interactionDriver);
 
 		// wait for interaction driver to finish

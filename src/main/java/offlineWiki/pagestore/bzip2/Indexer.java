@@ -7,11 +7,12 @@ package offlineWiki.pagestore.bzip2;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Comparator;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
@@ -19,39 +20,35 @@ import java.util.logging.Logger;
 
 import offlineWiki.OfflineWiki;
 import offlineWiki.Utf8Reader;
-import offlineWiki.fileindex.entry.BlockPosition;
-import offlineWiki.fileindex.entry.ComparatorBlockPosition;
-import offlineWiki.fileindex.entry.ComparatorTitlePosition;
-import offlineWiki.fileindex.entry.TitlePosition;
+import offlineWiki.index.entry.BlockPosition;
+import offlineWiki.index.entry.TitlePosition;
 import offlineWiki.utility.HtmlUtility;
 
 import org.apache.commons.compress.compressors.CompressorInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2NewBlockListener;
 
-import common.io.objectstream.index.IndexMerger;
-import common.io.objectstream.index.IndexWriter;
-
 class Indexer implements Runnable {
+
 	private static final int XML_BUFFER_SIZE = 1024*1024*16;
 
 	private final File inputFile;
-	private final Logger log;
+	private final Logger logger;
 
-	private final Comparator<TitlePosition> comparatorTitlePosition = new ComparatorTitlePosition();
-	private final Comparator<BlockPosition> comparatorBlockPosition = new ComparatorBlockPosition();
+	private PreparedStatement psIns;
+
+	private int maxTitleLen;
 
 	public Indexer() {
 		this.inputFile = OfflineWiki.getInstance().getXmlDumpFile();
-		this.log = OfflineWiki.getInstance().getLogger();
+		this.logger = Logger.getLogger(Indexer.class.getName());
 	}
 
 	// we need to do the XML parsing ourself to get a connection between the current element file offset
 	// and the parser state...
 	public void run() {
 
-		IndexWriter<TitlePosition> fileIndexWriterTitle = null;
-		IndexWriter<BlockPosition> fileIndexWriterBlock = null;
+		String url = "jdbc:h2:" + inputFile.getAbsolutePath() + ".offlinewiki";
 
 		int level = 0;
 		Map<Integer,StringBuilder> levelNameMap = new HashMap<Integer,StringBuilder>();
@@ -68,34 +65,53 @@ class Indexer implements Runnable {
 		BZip2CompressorInputStream bZip2In = null;
 		int titleCount = 0;
 
-		try {
+		try(Connection con = DriverManager.getConnection(url)) {
 			if(inputFile.getName().endsWith(".bz2")) {
 
 				class BlockListener implements BZip2NewBlockListener {
 
 					private int blockCount;
-					private final IndexWriter<BlockPosition> fileIndex;
+					private PreparedStatement psIns;
 
-					public BlockListener(IndexWriter<BlockPosition> fileIndexBlock) {
-						fileIndex = fileIndexBlock;
+					public BlockListener(Connection con) {
+						try {
+							psIns = con.prepareStatement("insert into block_position values (?, ?)");
+						} catch (SQLException e) {
+							e.printStackTrace();
+						}
 					}
 
 					@Override
 					public void newBlock(CompressorInputStream in, long currBlockPosition) {
 						long currentFilePos = in.getBytesRead();
-						fileIndex.write(new BlockPosition(currBlockPosition, currentFilePos));
-
+						insertBlockPositionEntry(con, new BlockPosition(currBlockPosition, currentFilePos));
 						//inform about progress
 						if(blockCount % 100 == 0) {
-							OfflineWiki.getInstance().getLogger().log(Level.INFO,"Bzip2 block no. {2} at {0} uncompressed at {1}", new Object[] {currBlockPosition / 8, currentFilePos, blockCount});
+							logger.log(Level.INFO,"Bzip2 block no. {2} at {0} uncompressed at {1}", new Object[] {currBlockPosition / 8, currentFilePos, blockCount});
 						}
 
 						blockCount++;
 					}
+
+					private void insertBlockPositionEntry(Connection con, BlockPosition blockPositionAvro) {
+						try {
+							psIns.setLong(1, blockPositionAvro.blockPositionInBits);
+							psIns.setLong(2, blockPositionAvro.uncompressedPosition);
+							psIns.executeUpdate();
+						} catch(SQLException e) {
+							e.printStackTrace();
+						}
+					}
 				}
 
-				fileIndexWriterBlock = new IndexWriter<BlockPosition>(inputFile, "blockPos", comparatorBlockPosition);
-				BlockListener bListen = new BlockListener(fileIndexWriterBlock);
+				con.createStatement().execute("create table block_position ( position_in_bits long, uncompressed_position long)");
+				con.createStatement().execute("create table titel_position ( titel varchar(255), position long )");
+
+				con.setAutoCommit(false);
+
+				BlockListener bListen = new BlockListener(con);
+
+				psIns = con.prepareStatement("insert into titel_position values (?, ?)");
 
 				InputStream in = new BufferedInputStream(new FileInputStream(inputFile));
 				bZip2In = new BZip2CompressorInputStream(in, false, bListen);
@@ -104,8 +120,6 @@ class Indexer implements Runnable {
 			} else if(inputFile.getName().endsWith(".xml")) {
 				utf8Reader = new Utf8Reader(new FileInputStream(inputFile));
 			}
-
-			fileIndexWriterTitle = new IndexWriter<TitlePosition>(inputFile, "titlePos", comparatorTitlePosition);
 
 			// read first
 			currentChar = utf8Reader.read();
@@ -124,7 +138,7 @@ class Indexer implements Runnable {
 					sbChar[sbCharPos] = (char) currentChar;
 					sbCharPos++;
 					if(sbCharPos > sbChar.length) {
-						log.log(Level.SEVERE,"Error! Buffer full!");
+						logger.log(Level.SEVERE,"Error! Buffer full!");
 						sbCharPos=0;
 					}
 					break;
@@ -203,10 +217,12 @@ class Indexer implements Runnable {
 						}
 						String title = HtmlUtility.decodeEntities(sb);
 						TitlePosition indexEntry = new TitlePosition(title, currentTagPos);
-						fileIndexWriterTitle.write(indexEntry);
+						insertIndexEntry(con, indexEntry);
 						titleCount++;
 						if(titleCount % 500 == 0) {
-							log.log(Level.FINE,"Processed {0} pages", titleCount);
+							logger.log(Level.FINE,"Processed {0} pages", titleCount);
+							psIns.executeBatch();
+							con.commit();
 						}
 					}
 				}
@@ -214,41 +230,23 @@ class Indexer implements Runnable {
 				// read next
 				currentChar = utf8Reader.read();
 			}
-		} catch (IOException e) {
+			psIns.executeBatch();
+		} catch (IOException | SQLException e) {
 			e.printStackTrace();
 			return;
-		} finally {
-			// close resources
-			try {
-				if(utf8Reader != null)
-					utf8Reader.close();
-			} catch (IOException e) {}
-			if(fileIndexWriterTitle != null)
-				fileIndexWriterTitle.close();
-			if(fileIndexWriterBlock != null)
-				fileIndexWriterBlock.close();
 		}
-
-		sortIndex();
 	}
 
-	public void sortIndex() {
-		// step2 mergesort partial indexes
-		IndexMerger<BlockPosition> im1 = null;
-		IndexMerger<TitlePosition> im2 = null;
-		try {
-			im1 = new IndexMerger<BlockPosition>(inputFile, "blockPos", 10000, comparatorBlockPosition, false);
-			im2 = new IndexMerger<TitlePosition>(inputFile, "titlePos", 10000, comparatorTitlePosition, false);
-			OfflineWiki.getInstance().getThreadPool().invokeAll(Arrays.asList(im1, im2));
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+	private void insertIndexEntry(Connection con, TitlePosition titlePosition) throws SQLException {
+
+		String title = titlePosition.title.toString();
+		if(title.length() > maxTitleLen) {
+			maxTitleLen = title.length();
+			logger.log(Level.INFO, "Longest title \"{0}\" with size {1}", new Object[] {title, maxTitleLen});
 		}
+
+		psIns.setString(1, title);
+		psIns.setLong(2, titlePosition.position);
+		psIns.addBatch();
 	}
 }

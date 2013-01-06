@@ -40,5 +40,4 @@ public class HtmlUtility {
 		}
 		return result.toString();
 	}
-
 }

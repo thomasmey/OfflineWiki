@@ -13,11 +13,13 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import offlineWiki.OfflineWiki;
 import offlineWiki.WikiPage;
 
-class SerialisedFsStore implements PageStore<WikiPage> {
+class SerialisedFsStore implements Store<WikiPage, String> {
 
 	private BlockingQueue<WikiPage> blockingQueue;
 	private Future<?> writer;
@@ -43,6 +45,7 @@ class SerialisedFsStore implements PageStore<WikiPage> {
 			for(WikiPage wp: list)
 				store(wp);
 		}
+
 		void store(WikiPage wp) {
 			ObjectOutputStream out = null;
 
@@ -61,8 +64,7 @@ class SerialisedFsStore implements PageStore<WikiPage> {
 				out.writeObject(wp);
 
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				Logger.getLogger(SerialisedFsStore.class.getName()).log(Level.SEVERE, "failed!", e);
 				return;
 			} finally {
 				try {
@@ -89,32 +91,33 @@ class SerialisedFsStore implements PageStore<WikiPage> {
 	}
 
 	@Override
+	public void open() {}
+
+	@Override
 	public void close() {
 		writer.cancel(true);
 	}
 
 	@Override
-	public List<String> getTitleAscending(String title, int noMaxHits) {
-		// TODO Auto-generated method stub
+	public List<String> getIndexKeyAscending(int noMaxHits, String indexKey) {
+		return null;
+	}
+
+	@Override
+	public List<String> getIndexKeyAscending(int maxReturnCount, IndexKeyFilter<String> filter) {
 		return null;
 	}
 
 	@Override
 	public boolean exists() {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
-	public void convert() {
-		// TODO Auto-generated method stub
-		
-	}
+	public void convert() {}
 
 	@Override
-	public WikiPage retrieveByTitel(String title) {
-		// TODO Auto-generated method stub
+	public WikiPage retrieveByIndexKey(String indexKey) {
 		return null;
 	}
-
 }

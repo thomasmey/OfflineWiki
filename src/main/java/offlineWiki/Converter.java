@@ -14,20 +14,20 @@ import java.util.logging.Logger;
 
 import javax.xml.stream.XMLStreamException;
 
-import offlineWiki.pagestore.PageStore;
+import offlineWiki.pagestore.Store;
 
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
 class Converter {
 
-	private final PageStore<WikiPage> pageStore;
+	private final Store<WikiPage, String> pageStore;
 	private final File inputFile;
 	private final Logger log;
 
 	public Converter() {
 		this.pageStore = OfflineWiki.getInstance().getPageStore();
 		this.inputFile = OfflineWiki.getInstance().getXmlDumpFile();
-		this.log = OfflineWiki.getInstance().getLogger();
+		this.log = Logger.getLogger(Converter.class.getName());
 	}
 
 	public void convert() {
@@ -35,16 +35,19 @@ class Converter {
 		int count = 0;
 		log.log(Level.INFO,"Converting xml...");
 
-		PageRetriever pr = null;
 		WikiPage wp = null;
-		InputStream in = null;
-		try {
-			in = new BufferedInputStream(new FileInputStream(inputFile));
-			if(inputFile.getName().endsWith(".bz2")) {
-				in = new BZip2CompressorInputStream(in);
-			}
 
-			pr = new PageRetriever(in);
+		InputStream i = null;
+		try {
+			i = new BufferedInputStream(new FileInputStream(inputFile));
+			if(inputFile.getName().endsWith(".bz2")) {
+				i = new BZip2CompressorInputStream(i);
+			}
+		} catch(IOException e) {
+			log.log(Level.SEVERE, "failed!", e);
+		}
+	
+		try(InputStream in = i; PageRetriever pr = new PageRetriever(i)) {
 
 			wp = pr.getNext();
 			while(wp != null) {
@@ -58,21 +61,8 @@ class Converter {
 				wp = null;
 				wp = pr.getNext();
 			}
-		} catch(IOException e) {
-			e.printStackTrace();
-		} catch (XMLStreamException e) {
-			e.printStackTrace();
-		} finally {
-			// close resources
-			try {
-				if(in != null)
-					in.close();
-			} catch (IOException e) {}
-			pageStore.close();
-			try {
-				if(in!=null)
-					in.close();
-			} catch (IOException e) {}
+		} catch(IOException | XMLStreamException e) {
+			log.log(Level.SEVERE, "failed!", e);
 		}
 	}
 }
