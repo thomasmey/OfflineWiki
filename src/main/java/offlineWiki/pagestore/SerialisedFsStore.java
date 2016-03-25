@@ -104,7 +104,7 @@ class SerialisedFsStore implements Store<WikiPage, String> {
 	}
 
 	@Override
-	public List<String> getIndexKeyAscending(int maxReturnCount, IndexKeyFilter<String> filter) {
+	public List<String> getIndexKeyAscendingLike(int maxReturnCount, String likeKey) {
 		return null;
 	}
 

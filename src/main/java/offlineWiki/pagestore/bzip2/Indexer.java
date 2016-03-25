@@ -105,13 +105,13 @@ class Indexer implements Runnable {
 				}
 
 				con.createStatement().execute("create table block_position ( position_in_bits long, uncompressed_position long)");
-				con.createStatement().execute("create table titel_position ( titel varchar(255), position long )");
+				con.createStatement().execute("create table title_position ( title varchar(1024), position long )");
 
 				con.setAutoCommit(false);
 
 				BlockListener bListen = new BlockListener(con);
 
-				psIns = con.prepareStatement("insert into titel_position values (?, ?)");
+				psIns = con.prepareStatement("insert into title_position values (?, ?)");
 
 				InputStream in = new BufferedInputStream(new FileInputStream(inputFile));
 				bZip2In = new BZip2CompressorInputStream(in, false, bListen);
@@ -231,9 +231,11 @@ class Indexer implements Runnable {
 				currentChar = utf8Reader.read();
 			}
 			psIns.executeBatch();
+			logger.log(Level.INFO, "creating DB index!");
+			con.createStatement().execute("create index title_x1 on TITLE_POSITION (TITLE asc)");
+			con.createStatement().execute("create index block_position_x1 on block_position ( uncompressed_position desc)");
 		} catch (IOException | SQLException e) {
-			e.printStackTrace();
-			return;
+			logger.log(Level.SEVERE, "failed!", e);
 		}
 	}
 

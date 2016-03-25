@@ -58,6 +58,7 @@ public class BZip2Store implements Store<WikiPage, String> {
 				}
 			} catch (SQLException e) {
 				/* skip exception */
+				e.printStackTrace();
 			}
 		}
 
@@ -67,7 +68,9 @@ public class BZip2Store implements Store<WikiPage, String> {
 	@Override
 	public List<String> getIndexKeyAscending(int noMaxHits, String indexKey) {
 
-		try (PreparedStatement psTitle = con.prepareStatement("select title, position from title_position where title >= ? order by title asc");) {
+		try (PreparedStatement psTitle = con.prepareStatement("select title, position from title_position where title >= ? order by title asc limit ?" );) {
+			psTitle.setString(1, indexKey);
+			psTitle.setInt(2, noMaxHits);
 			ResultSet rsTitle = psTitle.executeQuery();
 			rsTitle.setFetchSize(noMaxHits);
 			List<String> resultSet = new ArrayList<>();
@@ -83,16 +86,16 @@ public class BZip2Store implements Store<WikiPage, String> {
 	}
 
 	@Override
-	public List<String> getIndexKeyAscending(int maxReturnCount, IndexKeyFilter<String> filter) {
+	public List<String> getIndexKeyAscendingLike(int maxReturnCount, String likeKey) {
 
-		try (PreparedStatement psTitle = con.prepareStatement("select title, position from title_position order by title asc");) {
+		try (PreparedStatement psTitle = con.prepareStatement("select title, position from title_position where title like ? order by title asc limit ?");) {
+			psTitle.setString(1, likeKey);
+			psTitle.setInt(2, maxReturnCount);
 			ResultSet rsTitle = psTitle.executeQuery();
 			List<String> resultSet = new ArrayList<>();
 			while(resultSet.size() < maxReturnCount && rsTitle.next()) {
 				String title = rsTitle.getString(1);
-				if(filter.isRelevant(title) ) {
-					resultSet.add(title);
-				}
+				resultSet.add(title);
 			}
 			return resultSet;
 		} catch (SQLException e) {
@@ -116,14 +119,14 @@ public class BZip2Store implements Store<WikiPage, String> {
 		long uncompressedPosition = 0;
 
 		// get title and offset in uncompressed stream
-		try (PreparedStatement psTitle = con.prepareStatement("select title, position from title_position where title = ?)");
-			 PreparedStatement psBlock = con.prepareStatement("select position_in_bits, uncompressed_position from block_position where uncompressed_position = ?)");
+		try (PreparedStatement psTitle = con.prepareStatement("select title, position from title_position where title = ?");
+			 PreparedStatement psBlock = con.prepareStatement("select position_in_bits, uncompressed_position from block_position where uncompressed_position <= ? order by uncompressed_position desc limit 1");
 			) {
 			psTitle.setString(1, title);
 			ResultSet rsTitle = psTitle.executeQuery();
 			if(rsTitle.next()) {
 				position = rsTitle.getLong(2);
-				psBlock.setLong(2, position);
+				psBlock.setLong(1, position);
 				ResultSet rsBlock = psBlock.executeQuery();
 				if(rsBlock.next()) {
 					blockPositionInBits = rsBlock.getLong(1);

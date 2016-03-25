@@ -68,13 +68,8 @@ public class SearchResultListModel implements ListModel<String> {
 			newTitles = Collections.emptyList();
 		} else {
 
-			/* regular expression search
-			 * warning: this will do a full index scan and takes long
-			 */
 			if(searchText.contains("*")) {
-				Pattern pattern = Pattern.compile(searchText);
-				final Matcher matcher = pattern.matcher("");
-				newTitles = pageStore.getIndexKeyAscending(searchCount, indexKey -> {return matcher.reset(indexKey).matches();} );
+				newTitles = pageStore.getIndexKeyAscendingLike(searchCount, searchText.replace('*', '%'));
 			} else {
 				newTitles = pageStore.getIndexKeyAscending(searchCount, searchText);
 			}

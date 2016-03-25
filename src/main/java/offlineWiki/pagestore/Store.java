@@ -35,7 +35,7 @@ public interface Store<T,I> {
 	 * @param maxReturnCount no of maximum hits to return
 	 * @return list of all matches, sorted ascending
 	 */
-	List<I> getIndexKeyAscending(int maxReturnCount, IndexKeyFilter<I> filter);
+	List<I> getIndexKeyAscendingLike(int maxReturnCount, I likeKey);
 
 	/** retrieve object by index key */
 	T retrieveByIndexKey(I title);
