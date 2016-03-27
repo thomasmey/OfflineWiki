@@ -18,7 +18,6 @@ import java.util.logging.Logger;
 
 import javax.xml.stream.XMLStreamException;
 
-import offlineWiki.pagestore.IndexKeyFilter;
 import offlineWiki.pagestore.Store;
 
 import offlineWiki.OfflineWiki;
@@ -30,14 +29,6 @@ public class BZip2Store implements Store<WikiPage, String> {
 	private BZip2RandomInputStream bzin;
 	private Logger logger = Logger.getLogger(BZip2Store.class.getName());
 	private Connection con;
-
-	@Override
-	public void commit() { /* nop */ }
-
-	@Override
-	public void store(WikiPage wp) {
-		throw new UnsupportedOperationException();
-	}
 
 	@Override
 	public boolean exists() {
@@ -68,7 +59,7 @@ public class BZip2Store implements Store<WikiPage, String> {
 	@Override
 	public List<String> getIndexKeyAscending(int noMaxHits, String indexKey) {
 
-		try (PreparedStatement psTitle = con.prepareStatement("select title, position from title_position where title >= ? order by title asc limit ?" );) {
+		try (PreparedStatement psTitle = con.prepareStatement("select page_title from title_position where page_title >= ? order by page_title asc limit ?" );) {
 			psTitle.setString(1, indexKey);
 			psTitle.setInt(2, noMaxHits);
 			ResultSet rsTitle = psTitle.executeQuery();
@@ -88,7 +79,7 @@ public class BZip2Store implements Store<WikiPage, String> {
 	@Override
 	public List<String> getIndexKeyAscendingLike(int maxReturnCount, String likeKey) {
 
-		try (PreparedStatement psTitle = con.prepareStatement("select title, position from title_position where title like ? order by title asc limit ?");) {
+		try (PreparedStatement psTitle = con.prepareStatement("select page_title from title_position where page_title like ? order by page_title asc limit ?");) {
 			psTitle.setString(1, likeKey);
 			psTitle.setInt(2, maxReturnCount);
 			ResultSet rsTitle = psTitle.executeQuery();
@@ -113,25 +104,18 @@ public class BZip2Store implements Store<WikiPage, String> {
 	@Override
 	public WikiPage retrieveByIndexKey(String title) {
 
-		long position = 0;
-
 		long blockPositionInBits = 0;
-		long uncompressedPosition = 0;
+		long blockUncompressedPosition = 0;
+		long pageUncompressedPosition = 0;
 
 		// get title and offset in uncompressed stream
-		try (PreparedStatement psTitle = con.prepareStatement("select title, position from title_position where title = ?");
-			 PreparedStatement psBlock = con.prepareStatement("select position_in_bits, uncompressed_position from block_position where uncompressed_position <= ? order by uncompressed_position desc limit 1");
-			) {
+		try (PreparedStatement psTitle = con.prepareStatement("select page_title, page_uncompressed_position, block_uncompressed_position, block_position_in_bits from title_position where page_title = ?")) {
 			psTitle.setString(1, title);
 			ResultSet rsTitle = psTitle.executeQuery();
 			if(rsTitle.next()) {
-				position = rsTitle.getLong(2);
-				psBlock.setLong(1, position);
-				ResultSet rsBlock = psBlock.executeQuery();
-				if(rsBlock.next()) {
-					blockPositionInBits = rsBlock.getLong(1);
-					uncompressedPosition = rsBlock.getLong(2);
-				}
+				pageUncompressedPosition = rsTitle.getLong(2);
+				blockUncompressedPosition = rsTitle.getLong(3);
+				blockPositionInBits = rsTitle.getLong(4);
 			}
 		} catch (SQLException e) {
 			logger.log(Level.SEVERE, "", e);
@@ -143,7 +127,8 @@ public class BZip2Store implements Store<WikiPage, String> {
 				//skip in the compressed bzip2 file to the given block
 				bzin.skipToBlockAt(blockPositionInBits);
 				// skip in the uncompressed output to the correct position
-				bzin.skip(position - uncompressedPosition);
+				bzin.skip(pageUncompressedPosition - blockUncompressedPosition);
+
 				try (PageRetriever pr = new PageRetriever(bzin)) {
 					return pr.getNext();
 				} catch (XMLStreamException | IOException ex) {

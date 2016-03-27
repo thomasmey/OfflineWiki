@@ -1,6 +1,6 @@
 Start with:
 
-java -cp path-to-classes/ offlineWiki.Run /path-to/dumfile/dewiki-latest-pages-articles.xml 2> ~/wiki-output.txt
+mvn exec:java -Dexec.mainClass=offlineWiki.OfflineWiki -Dexec.arguments=/path/to/dewiki-latest-pages-articles.xml
 
 The wikipage is written to stderr. so open this file with a text editor to read the found articles.
 

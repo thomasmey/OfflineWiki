@@ -41,13 +41,15 @@ public class BZip2RandomInputStream extends InputStream {
 
 	/** skip to the given bzip2 block
 	 * 
-	 * @param blockPosition block position in bits. must be a valid position
+	 * @param blockPosition block position in bits. must be a valid block start position
 	 * @throws IOException
 	 */
 	public void skipToBlockAt(long blockPosition) throws IOException {
 		long pos = blockPosition / 8;
 		byte remain = (byte) (blockPosition % 8);
 		randomAccess.seek(pos);
+
+		//skip remaining  bits
 		inExtern.resetBlock(remain);
 		byteBuffer.rewind();
 		byteBuffer.limit(0);

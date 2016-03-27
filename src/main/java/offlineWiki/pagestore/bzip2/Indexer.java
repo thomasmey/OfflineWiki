@@ -15,18 +15,16 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import offlineWiki.OfflineWiki;
 import offlineWiki.Utf8Reader;
-import offlineWiki.index.entry.BlockPosition;
-import offlineWiki.index.entry.TitlePosition;
 import offlineWiki.utility.HtmlUtility;
 
-import org.apache.commons.compress.compressors.CompressorInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
-import org.apache.commons.compress.compressors.bzip2.BZip2NewBlockListener;
 
 class Indexer implements Runnable {
 
@@ -39,9 +37,16 @@ class Indexer implements Runnable {
 
 	private int maxTitleLen;
 
+	/** bzip2 stream mapping: block starts: uncompressed position, position in bits*/
+	private TreeMap<Long,Long> bzip2Blocks;
+
+	/** current bzip2 block number */
+	private long blockCount;
+
 	public Indexer() {
 		this.inputFile = OfflineWiki.getInstance().getXmlDumpFile();
 		this.logger = Logger.getLogger(Indexer.class.getName());
+		this.bzip2Blocks = new TreeMap<>();
 	}
 
 	// we need to do the XML parsing ourself to get a connection between the current element file offset
@@ -66,55 +71,27 @@ class Indexer implements Runnable {
 		int titleCount = 0;
 
 		try(Connection con = DriverManager.getConnection(url)) {
+			con.createStatement().execute("create table title_position ( page_title varchar(1024), page_uncompressed_position long, block_uncompressed_position long, block_position_in_bits long)");
+			con.createStatement().execute("create index title_position_x1 on title_position (page_title asc)");
+
+//			con.createStatement().execute("create table index_status ()
+
+			con.setAutoCommit(false);
+			psIns = con.prepareStatement("insert into title_position values (?, ?, ?, ?)");
+
 			if(inputFile.getName().endsWith(".bz2")) {
-
-				class BlockListener implements BZip2NewBlockListener {
-
-					private int blockCount;
-					private PreparedStatement psIns;
-
-					public BlockListener(Connection con) {
-						try {
-							psIns = con.prepareStatement("insert into block_position values (?, ?)");
-						} catch (SQLException e) {
-							e.printStackTrace();
-						}
-					}
-
-					@Override
-					public void newBlock(CompressorInputStream in, long currBlockPosition) {
-						long currentFilePos = in.getBytesRead();
-						insertBlockPositionEntry(con, new BlockPosition(currBlockPosition, currentFilePos));
-						//inform about progress
-						if(blockCount % 100 == 0) {
-							logger.log(Level.INFO,"Bzip2 block no. {2} at {0} uncompressed at {1}", new Object[] {currBlockPosition / 8, currentFilePos, blockCount});
-						}
-
-						blockCount++;
-					}
-
-					private void insertBlockPositionEntry(Connection con, BlockPosition blockPositionAvro) {
-						try {
-							psIns.setLong(1, blockPositionAvro.blockPositionInBits);
-							psIns.setLong(2, blockPositionAvro.uncompressedPosition);
-							psIns.executeUpdate();
-						} catch(SQLException e) {
-							e.printStackTrace();
-						}
-					}
-				}
-
-				con.createStatement().execute("create table block_position ( position_in_bits long, uncompressed_position long)");
-				con.createStatement().execute("create table title_position ( title varchar(1024), position long )");
-
-				con.setAutoCommit(false);
-
-				BlockListener bListen = new BlockListener(con);
-
-				psIns = con.prepareStatement("insert into title_position values (?, ?)");
-
 				InputStream in = new BufferedInputStream(new FileInputStream(inputFile));
-				bZip2In = new BZip2CompressorInputStream(in, false, bListen);
+
+				bZip2In = new BZip2CompressorInputStream(in, false, (lin, blockPositionInBits) -> 
+				{	long blockUncompressedPosition = lin.getBytesRead();
+					if(blockCount % 100 == 0) {
+						logger.log(Level.INFO,"Bzip2 block no. {2} at {0} uncompressed at {1}", new Object[] {blockPositionInBits / 8, blockUncompressedPosition, blockCount});
+					}
+					synchronized (bzip2Blocks) {
+						bzip2Blocks.put(blockUncompressedPosition, blockPositionInBits);
+					}
+					blockCount++;
+				});
 				utf8Reader = new Utf8Reader(bZip2In);
 
 			} else if(inputFile.getName().endsWith(".xml")) {
@@ -193,7 +170,7 @@ class Indexer implements Runnable {
 				case 4: // single element
 					if(currentChar == '>') {
 						sbCharPos = 0;
-						currentMode = 		0;
+						currentMode = 0;
 						break;
 					}
 
@@ -216,10 +193,9 @@ class Indexer implements Runnable {
 							sb.appendCodePoint(sbChar[i]);
 						}
 						String title = HtmlUtility.decodeEntities(sb);
-						TitlePosition indexEntry = new TitlePosition(title, currentTagPos);
-						insertIndexEntry(con, indexEntry);
+						insertIndexEntry(con, title, currentTagPos);
 						titleCount++;
-						if(titleCount % 500 == 0) {
+						if(titleCount % 1000 == 0) {
 							logger.log(Level.FINE,"Processed {0} pages", titleCount);
 							psIns.executeBatch();
 							con.commit();
@@ -232,23 +208,37 @@ class Indexer implements Runnable {
 			}
 			psIns.executeBatch();
 			logger.log(Level.INFO, "creating DB index!");
-			con.createStatement().execute("create index title_x1 on TITLE_POSITION (TITLE asc)");
-			con.createStatement().execute("create index block_position_x1 on block_position ( uncompressed_position desc)");
 		} catch (IOException | SQLException e) {
 			logger.log(Level.SEVERE, "failed!", e);
 		}
 	}
 
-	private void insertIndexEntry(Connection con, TitlePosition titlePosition) throws SQLException {
+	private void insertIndexEntry(Connection con, String pageTitel, long currentTagUncompressedPosition) throws SQLException {
 
-		String title = titlePosition.title.toString();
+		String title = pageTitel;
 		if(title.length() > maxTitleLen) {
 			maxTitleLen = title.length();
 			logger.log(Level.INFO, "Longest title \"{0}\" with size {1}", new Object[] {title, maxTitleLen});
 		}
 
+		long blockUncompressedPosition;
+		long blockPositionInBits;
+		synchronized (bzip2Blocks) {
+			Entry<Long, Long> e = bzip2Blocks.floorEntry(currentTagUncompressedPosition);
+			blockUncompressedPosition = e.getKey();
+			blockPositionInBits = e.getValue();
+
+			// remove all smaller entries from map
+			Long lowerKey;
+			while ((lowerKey = bzip2Blocks.lowerKey(e.getKey())) != null) {
+				bzip2Blocks.remove(lowerKey);
+			}
+		}
+
 		psIns.setString(1, title);
-		psIns.setLong(2, titlePosition.position);
+		psIns.setLong(2, currentTagUncompressedPosition);
+		psIns.setLong(3, blockUncompressedPosition);
+		psIns.setLong(4, blockPositionInBits);
 		psIns.addBatch();
 	}
 }

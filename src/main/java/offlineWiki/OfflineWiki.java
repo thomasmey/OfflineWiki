@@ -78,7 +78,8 @@ public class OfflineWiki implements Runnable {
 
 		if (!pageStore.exists()) {
 			log.log(Level.INFO, "Creating index files. Sadly this takes very long, please be patient!");
-			pageStore.convert();
+			// run index process in parallel
+			threadPool.execute(() -> pageStore.convert());
 		}
 		pageStore.open();
 

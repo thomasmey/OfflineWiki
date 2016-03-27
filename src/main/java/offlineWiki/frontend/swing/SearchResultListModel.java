@@ -5,8 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.swing.ListModel;
 import javax.swing.event.ListDataEvent;
@@ -14,7 +12,6 @@ import javax.swing.event.ListDataListener;
 
 import offlineWiki.OfflineWiki;
 import offlineWiki.WikiPage;
-import offlineWiki.pagestore.IndexKeyFilter;
 import offlineWiki.pagestore.Store;
 
 public class SearchResultListModel implements ListModel<String> {

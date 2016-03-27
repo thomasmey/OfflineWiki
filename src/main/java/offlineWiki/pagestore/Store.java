@@ -8,12 +8,6 @@ import java.util.List;
 
 public interface Store<T,I> {
 
-	/** commit changes in the PageStore */
-	void commit();
-
-	/** store an object in the PageStore */
-	void store(T wp);
-
 	/** open store */
 	void open();
 
