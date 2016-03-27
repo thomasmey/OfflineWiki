@@ -92,8 +92,9 @@ public class OfflineWiki implements Runnable {
 			log.log(Level.SEVERE, "wait for interaction driver to finish was interruppted!", e);
 		}
 
+		pageStore.close();
+
 		// shutdown pool
 		threadPool.shutdown();
-		threadPool.shutdownNow();
 	}
 }

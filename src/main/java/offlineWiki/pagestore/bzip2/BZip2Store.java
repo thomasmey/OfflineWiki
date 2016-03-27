@@ -43,8 +43,7 @@ public class BZip2Store implements Store<WikiPage, String> {
 			String url = "jdbc:h2:" + baseFile.getAbsolutePath() + ".offlinewiki";
 
 			try(Connection con = DriverManager.getConnection(url);) {
-				if(con.createStatement().executeQuery("select count(*) from block_position").first() &&
-						con.createStatement().executeQuery("select count(*) from title_position").first()) {
+				if(con.createStatement().executeQuery("select count(*) from title_position").first()) {
 					rc = true;
 				}
 			} catch (SQLException e) {
