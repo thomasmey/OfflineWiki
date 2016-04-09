@@ -20,22 +20,20 @@
 	</build>
 
 	<dependencies>
-		<!-- <dependency> <groupId>de.m3y3r</groupId> <artifactId>commonClasses</artifactId> 
-			<version>0.0.1-SNAPSHOT</version> </dependency> -->
 		<dependency>
 			<groupId>org.apache.lucene</groupId>
 			<artifactId>lucene-core</artifactId>
 			<version>5.5.0</version>
 		</dependency>
 		<dependency>
+			<groupId>org.apache.lucene</groupId>
+			<artifactId>lucene-analyzers-common</artifactId>
+			<version>5.5.0</version>
+		</dependency>
+		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-compress</artifactId>
 			<version>1.10-COMPRESS207</version>
-		</dependency>
-		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
-			<version>1.4.191</version>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>

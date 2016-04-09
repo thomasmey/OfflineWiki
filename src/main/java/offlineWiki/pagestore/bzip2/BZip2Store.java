@@ -6,17 +6,28 @@ package offlineWiki.pagestore.bzip2;
 
 import java.io.File;
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.xml.stream.XMLStreamException;
+
+import org.apache.lucene.document.Document;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.RegexpQuery;
+import org.apache.lucene.search.Sort;
+import org.apache.lucene.search.SortField;
+import org.apache.lucene.search.SortField.Type;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TermRangeQuery;
+import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.store.FSDirectory;
 
 import offlineWiki.pagestore.Store;
 
@@ -28,7 +39,6 @@ public class BZip2Store implements Store<WikiPage, String> {
 
 	private BZip2RandomInputStream bzin;
 	private Logger logger = Logger.getLogger(BZip2Store.class.getName());
-	private Connection con;
 
 	@Override
 	public boolean exists() {
@@ -39,17 +49,6 @@ public class BZip2Store implements Store<WikiPage, String> {
 				baseFile.getParentFile().listFiles(
 						(d, fn) -> {if(fn.startsWith(baseFile.getName()) && fn.endsWith("offlinewiki.mv.db")) return true; else return false;})
 				.length > 0) {
-
-			String url = "jdbc:h2:" + baseFile.getAbsolutePath() + ".offlinewiki";
-
-			try(Connection con = DriverManager.getConnection(url);) {
-				if(con.createStatement().executeQuery("select count(*) from title_position").first()) {
-					rc = true;
-				}
-			} catch (SQLException e) {
-				/* skip exception */
-				e.printStackTrace();
-			}
 		}
 
 		return rc;
@@ -58,18 +57,24 @@ public class BZip2Store implements Store<WikiPage, String> {
 	@Override
 	public List<String> getIndexKeyAscending(int noMaxHits, String indexKey) {
 
-		try (PreparedStatement psTitle = con.prepareStatement("select page_title from title_position where page_title >= ? order by page_title asc limit ?" );) {
-			psTitle.setString(1, indexKey);
-			psTitle.setInt(2, noMaxHits);
-			ResultSet rsTitle = psTitle.executeQuery();
-			rsTitle.setFetchSize(noMaxHits);
+		File inputFile = OfflineWiki.getInstance().getXmlDumpFile();
+		File df = new File(inputFile.getParentFile(), inputFile.getName() + ".index");
+
+		try(IndexReader reader = DirectoryReader.open(FSDirectory.open(df.toPath()));) {
+			IndexSearcher searcher = new IndexSearcher(reader);
+
+			Sort sorter = new Sort();
+			sorter.setSort(new SortField("title", Type.STRING));
+			TermRangeQuery query = TermRangeQuery.newStringRange("title", indexKey, null, true, false);
+			TopDocs docs = searcher.search(query, noMaxHits, sorter);
+
 			List<String> resultSet = new ArrayList<>();
-			while(rsTitle.next()) {
-				String title = rsTitle.getString(1);
-				resultSet.add(title);
+			for(int i=0, n=docs.scoreDocs.length; i < n; i++) {
+				Document document = reader.document(docs.scoreDocs[i].doc);
+				resultSet.add(document.getField("title").stringValue());
 			}
 			return resultSet;
-		} catch (SQLException e) {
+		} catch(IOException e) {
 			logger.log(Level.SEVERE, "", e);
 		}
 		return null;
@@ -78,17 +83,26 @@ public class BZip2Store implements Store<WikiPage, String> {
 	@Override
 	public List<String> getIndexKeyAscendingLike(int maxReturnCount, String likeKey) {
 
-		try (PreparedStatement psTitle = con.prepareStatement("select page_title from title_position where page_title like ? order by page_title asc limit ?");) {
-			psTitle.setString(1, likeKey);
-			psTitle.setInt(2, maxReturnCount);
-			ResultSet rsTitle = psTitle.executeQuery();
+		File inputFile = OfflineWiki.getInstance().getXmlDumpFile();
+		File df = new File(inputFile.getParentFile(), inputFile.getName() + ".index");
+
+		try(IndexReader reader = DirectoryReader.open(FSDirectory.open(df.toPath()));) {
+			IndexSearcher searcher = new IndexSearcher(reader);
+
+			Sort sorter = new Sort();
+			sorter.setSort(new SortField("title", Type.STRING));
+
+			//FIMXE: maybe use a FuzzyQuery here?!
+			Query query = new RegexpQuery(new Term("title", likeKey));
+			TopDocs docs = searcher.search(query, maxReturnCount, sorter);
+
 			List<String> resultSet = new ArrayList<>();
-			while(resultSet.size() < maxReturnCount && rsTitle.next()) {
-				String title = rsTitle.getString(1);
-				resultSet.add(title);
+			for(int i=0, n=docs.scoreDocs.length; i < n; i++) {
+				Document document = reader.document(docs.scoreDocs[i].doc);
+				resultSet.add(document.getField("title").stringValue());
 			}
 			return resultSet;
-		} catch (SQLException e) {
+		} catch(IOException e) {
 			logger.log(Level.SEVERE, "", e);
 		}
 		return null;
@@ -108,17 +122,32 @@ public class BZip2Store implements Store<WikiPage, String> {
 		long pageUncompressedPosition = 0;
 
 		// get title and offset in uncompressed stream
-		try (PreparedStatement psTitle = con.prepareStatement("select page_title, page_uncompressed_position, block_uncompressed_position, block_position_in_bits from title_position where page_title = ?")) {
-			psTitle.setString(1, title);
-			ResultSet rsTitle = psTitle.executeQuery();
-			if(rsTitle.next()) {
-				pageUncompressedPosition = rsTitle.getLong(2);
-				blockUncompressedPosition = rsTitle.getLong(3);
-				blockPositionInBits = rsTitle.getLong(4);
+		File inputFile = OfflineWiki.getInstance().getXmlDumpFile();
+		File df = new File(inputFile.getParentFile(), inputFile.getName() + ".index");
+
+		try(IndexReader reader = DirectoryReader.open(FSDirectory.open(df.toPath()));) {
+			IndexSearcher searcher = new IndexSearcher(reader);
+
+			Query query = new TermQuery(new Term("title", title));
+			TopDocs docs = searcher.search(query, 1);
+			Document document = reader.document(docs.scoreDocs[0].doc);
+			{
+				IndexableField field = document.getField("blockPositionInBits");
+				blockPositionInBits = field.numericValue().longValue();
 			}
-		} catch (SQLException e) {
+
+			{
+				IndexableField field = document.getField("pageUncompressedPosition");
+				pageUncompressedPosition = field.numericValue().longValue();
+			}
+
+			{
+				IndexableField field = document.getField("blockUncompressedPosition");
+				blockUncompressedPosition = field.numericValue().longValue();
+			}
+
+		} catch(IOException e) {
 			logger.log(Level.SEVERE, "", e);
-			return null;
 		}
 
 		try {
@@ -145,9 +174,7 @@ public class BZip2Store implements Store<WikiPage, String> {
 		File baseFile = OfflineWiki.getInstance().getXmlDumpFile();
 		try {
 			bzin = new BZip2RandomInputStream(baseFile);
-			String url = "jdbc:h2:" + baseFile.getAbsolutePath() + ".offlinewiki";
-			con = DriverManager.getConnection(url);
-		} catch (IOException | SQLException e) {
+		} catch (IOException e) {
 			logger.log(Level.SEVERE, "", e);
 		}
 	}
@@ -157,11 +184,8 @@ public class BZip2Store implements Store<WikiPage, String> {
 		try {
 			if(bzin != null)
 				bzin.close();
-			if(con != null) {
-				con.close();
-			}
-		} catch(IOException | SQLException ex) {
-			logger.log(Level.SEVERE, "Failed!", ex);
+		} catch(IOException e) {
+			logger.log(Level.SEVERE, "Failed!", e);
 		}
 	}
 }

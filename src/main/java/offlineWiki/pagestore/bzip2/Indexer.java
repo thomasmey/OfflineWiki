@@ -9,10 +9,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -25,6 +21,18 @@ import offlineWiki.Utf8Reader;
 import offlineWiki.utility.HtmlUtility;
 
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.LongField;
+import org.apache.lucene.document.SortedDocValuesField;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.BytesRef;
 
 class Indexer implements Runnable {
 
@@ -32,8 +40,6 @@ class Indexer implements Runnable {
 
 	private final File inputFile;
 	private final Logger logger;
-
-	private PreparedStatement psIns;
 
 	private int maxTitleLen;
 
@@ -53,8 +59,6 @@ class Indexer implements Runnable {
 	// and the parser state...
 	public void run() {
 
-		String url = "jdbc:h2:" + inputFile.getAbsolutePath() + ".offlinewiki";
-
 		int level = 0;
 		Map<Integer,StringBuilder> levelNameMap = new HashMap<Integer,StringBuilder>();
 
@@ -70,14 +74,12 @@ class Indexer implements Runnable {
 		BZip2CompressorInputStream bZip2In = null;
 		int titleCount = 0;
 
-		try(Connection con = DriverManager.getConnection(url)) {
-			con.createStatement().execute("create table title_position ( page_title varchar(1024), page_uncompressed_position long, block_uncompressed_position long, block_position_in_bits long)");
-			con.createStatement().execute("create index title_position_x1 on title_position (page_title asc)");
-
-//			con.createStatement().execute("create table index_status ()
-
-			con.setAutoCommit(false);
-			psIns = con.prepareStatement("insert into title_position values (?, ?, ?, ?)");
+		Analyzer analyzer = new StandardAnalyzer();
+		IndexWriterConfig iwc = new IndexWriterConfig(analyzer);
+		File df = new File(inputFile.getParentFile(), inputFile.getName() + ".index");
+		try(
+			Directory directory = FSDirectory.open(df.toPath());
+			IndexWriter index = new IndexWriter(directory, iwc);) {
 
 			if(inputFile.getName().endsWith(".bz2")) {
 				InputStream in = new BufferedInputStream(new FileInputStream(inputFile));
@@ -184,7 +186,7 @@ class Indexer implements Runnable {
 
 				if(prevMode==1) {
 					if(currentMode==0 && level == 2 && levelNameMap.get(2).toString().equals("page")) {
-						// save position
+						// start of <page> tag - save this position
 						currentTagPos = utf8Reader.getCurrenFilePos() - 6;
 					}
 					if(currentMode==2 && level == 3 && levelNameMap.get(2).toString().equals("page") && levelNameMap.get(3).toString().equals("title")) {
@@ -193,12 +195,11 @@ class Indexer implements Runnable {
 							sb.appendCodePoint(sbChar[i]);
 						}
 						String title = HtmlUtility.decodeEntities(sb);
-						insertIndexEntry(con, title, currentTagPos);
+						addToIndex(index, title, currentTagPos);
 						titleCount++;
 						if(titleCount % 1000 == 0) {
 							logger.log(Level.FINE,"Processed {0} pages", titleCount);
-							psIns.executeBatch();
-							con.commit();
+							index.commit();
 						}
 					}
 				}
@@ -206,14 +207,12 @@ class Indexer implements Runnable {
 				// read next
 				currentChar = utf8Reader.read();
 			}
-			psIns.executeBatch();
-			logger.log(Level.INFO, "creating DB index!");
-		} catch (IOException | SQLException e) {
+		} catch (IOException e) {
 			logger.log(Level.SEVERE, "failed!", e);
 		}
 	}
 
-	private void insertIndexEntry(Connection con, String pageTitel, long currentTagUncompressedPosition) throws SQLException {
+	private void addToIndex(IndexWriter index, String pageTitel, long currentTagUncompressedPosition) throws IOException {
 
 		String title = pageTitel;
 		if(title.length() > maxTitleLen) {
@@ -235,10 +234,14 @@ class Indexer implements Runnable {
 			}
 		}
 
-		psIns.setString(1, title);
-		psIns.setLong(2, currentTagUncompressedPosition);
-		psIns.setLong(3, blockUncompressedPosition);
-		psIns.setLong(4, blockPositionInBits);
-		psIns.addBatch();
+		Document d = new Document();
+		d.add(new StringField("title", title, Field.Store.YES));
+		d.add(new SortedDocValuesField("title", new BytesRef(title)));
+
+		d.add(new LongField("pageUncompressedPosition", currentTagUncompressedPosition, Field.Store.YES));
+		d.add(new LongField("blockUncompressedPosition", blockUncompressedPosition, Field.Store.YES));
+		d.add(new LongField("blockPositionInBits", blockPositionInBits, Field.Store.YES));
+
+		index.addDocument(d);
 	}
 }
