@@ -33,7 +33,7 @@
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-compress</artifactId>
-			<version>1.10-COMPRESS207</version>
+			<version>1.12-COMPRESS207</version>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>

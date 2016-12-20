@@ -47,8 +47,9 @@ public class BZip2Store implements Store<WikiPage, String> {
 		if(baseFile.exists() &&
 				baseFile.isFile() &&
 				baseFile.getParentFile().listFiles(
-						(d, fn) -> {if(fn.startsWith(baseFile.getName()) && fn.endsWith("offlinewiki.mv.db")) return true; else return false;})
+						(d, fn) -> {if(fn.startsWith(baseFile.getName()) && fn.endsWith(".index")) return true; else return false;})
 				.length > 0) {
+			rc = true;
 		}
 
 		return rc;
