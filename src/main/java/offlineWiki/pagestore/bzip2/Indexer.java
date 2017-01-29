@@ -20,6 +20,9 @@ import offlineWiki.OfflineWiki;
 import offlineWiki.Utf8Reader;
 import offlineWiki.utility.HtmlUtility;
 
+import org.apache.commons.compress.compressors.CompressorEvent;
+import org.apache.commons.compress.compressors.CompressorEventListener;
+import org.apache.commons.compress.compressors.CompressorInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
@@ -84,16 +87,20 @@ class Indexer implements Runnable {
 			if(inputFile.getName().endsWith(".bz2")) {
 				InputStream in = new BufferedInputStream(new FileInputStream(inputFile));
 
-				bZip2In = new BZip2CompressorInputStream(in, false, (lin, blockPositionInBits) -> 
-				{	long blockUncompressedPosition = lin.getBytesRead();
-					if(blockCount % 100 == 0) {
-						logger.log(Level.INFO,"Bzip2 block no. {2} at {0} uncompressed at {1}", new Object[] {blockPositionInBits / 8, blockUncompressedPosition, blockCount});
+				bZip2In = new BZip2CompressorInputStream(in, false);
+				CompressorEventListener listener = e -> {
+					if(e.getEventType() != CompressorEvent.EventType.NEW_BLOCK) {
+						long blockUncompressedPosition = ((CompressorInputStream) e.getSource()).getBytesRead();
+						if(blockCount % 100 == 0) {
+							logger.log(Level.INFO,"Bzip2 block no. {2} at {0} uncompressed at {1}", new Object[] {e.getBitsProcessed() / 8, blockUncompressedPosition, blockCount});
+						}
+						synchronized (bzip2Blocks) {
+							bzip2Blocks.put(blockUncompressedPosition, e.getBitsProcessed());
+						}
+						blockCount++;
 					}
-					synchronized (bzip2Blocks) {
-						bzip2Blocks.put(blockUncompressedPosition, blockPositionInBits);
-					}
-					blockCount++;
-				});
+				};
+				bZip2In.addCompressorEventListener(listener);
 				utf8Reader = new Utf8Reader(bZip2In);
 
 			} else if(inputFile.getName().endsWith(".xml")) {
