@@ -89,7 +89,7 @@ class Indexer implements Runnable {
 
 				bZip2In = new BZip2CompressorInputStream(in, false);
 				CompressorEventListener listener = e -> {
-					if(e.getEventType() != CompressorEvent.EventType.NEW_BLOCK) {
+					if(e.getEventType() == CompressorEvent.EventType.NEW_BLOCK) {
 						long blockUncompressedPosition = ((CompressorInputStream) e.getSource()).getBytesRead();
 						if(blockCount % 100 == 0) {
 							logger.log(Level.INFO,"Bzip2 block no. {2} at {0} uncompressed at {1}", new Object[] {e.getBitsProcessed() / 8, blockUncompressedPosition, blockCount});
