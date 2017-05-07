@@ -20,7 +20,6 @@ public class Utf8Reader extends Reader {
 	private boolean byteBufferEOF;
 
 	public Utf8Reader(InputStream in) {
-
 		this.in = in;
 		this.byteBuffer = ByteBuffer.allocate(BUFFER_SIZE);
 		fillBuffer();
@@ -101,8 +100,7 @@ public class Utf8Reader extends Reader {
 
 		if(len < 0) {
 			byteBufferEOF = true;
-		}
-		else {
+		} else {
 			byteBuffer.limit(len);
 		}
 	}

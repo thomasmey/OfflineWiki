@@ -25,17 +25,20 @@ public class BZip2RandomInputStream extends InputStream {
 	public BZip2RandomInputStream(File baseFile, long blockPos) throws IOException {
 		randomAccess = new RandomAccessFile(baseFile, "r");
 		inExtern = new BZip2CompressorInputStream(inIntern);
+		inExtern.read();
 		if(blockPos >= 0)
 			skipToBlockAt(blockPos);
 
 		byteArray = new byte[1024 * 1024];
 		byteBuffer = ByteBuffer.wrap(byteArray);
+		byteBuffer.limit(0);
 	}
 
 	public BZip2RandomInputStream(File baseFile) throws IOException {
 		this(baseFile,-1);
 	}
 
+	@Override
 	public void close() throws IOException {
 	}
 
@@ -67,5 +70,13 @@ public class BZip2RandomInputStream extends InputStream {
 		}
 		return byteBuffer.get();
 	}
+
+//	@Override
+//	public long skip(long count) throws IOException {
+//		if(byteBuffer.remaining() <= count) {
+//			byteBuffer.position((int) (byteBuffer.position() + count));
+//			return count;
+//		}
+//	}
 
 }
