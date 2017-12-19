@@ -28,8 +28,9 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.LongField;
+import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.SortedDocValuesField;
+import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -245,9 +246,12 @@ class Indexer implements Runnable {
 		d.add(new StringField("title", title, Field.Store.YES));
 		d.add(new SortedDocValuesField("title", new BytesRef(title)));
 
-		d.add(new LongField("pageUncompressedPosition", currentTagUncompressedPosition, Field.Store.YES));
-		d.add(new LongField("blockUncompressedPosition", blockUncompressedPosition, Field.Store.YES));
-		d.add(new LongField("blockPositionInBits", blockPositionInBits, Field.Store.YES));
+		d.add(new LongPoint("pageUncompressedPosition", currentTagUncompressedPosition));
+		d.add(new StoredField("pageUncompressedPosition", currentTagUncompressedPosition));
+		d.add(new LongPoint("blockUncompressedPosition", blockUncompressedPosition));
+		d.add(new StoredField("blockUncompressedPosition", blockUncompressedPosition));
+		d.add(new LongPoint("blockPositionInBits", blockPositionInBits));
+		d.add(new StoredField("blockPositionInBits", blockPositionInBits));
 
 		index.addDocument(d);
 	}
