@@ -8,14 +8,12 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileChannel.MapMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
@@ -32,14 +30,16 @@ import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.FSDirectory;
 
-import de.m3y3r.offlinewiki.pagestore.Store;
+import de.m3y3r.offlinewiki.Config;
 import de.m3y3r.offlinewiki.OfflineWiki;
 import de.m3y3r.offlinewiki.PageRetriever;
 import de.m3y3r.offlinewiki.WikiPage;
+import de.m3y3r.offlinewiki.pagestore.Store;
+import de.m3y3r.offlinewiki.utility.BufferInputStream;
+import de.m3y3r.offlinewiki.utility.SplitFileInputStream;
 
 public class BZip2Store implements Store<WikiPage, String> {
 
-	private BZip2RandomInputStream bzin;
 	private Logger logger = Logger.getLogger(BZip2Store.class.getName());
 
 	@Override
@@ -117,8 +117,8 @@ public class BZip2Store implements Store<WikiPage, String> {
 	public void convert() {
 		try {
 			File inputFile = OfflineWiki.getInstance().getXmlDumpFile();
-//			FileChannel fc = FileChannel.open(inputFile.toPath());
-//			ByteBuffer byteBuffer = fc.map(MapMode.READ_ONLY, 0, fc.size());
+			//			FileChannel fc = FileChannel.open(inputFile.toPath());
+			//			ByteBuffer byteBuffer = fc.map(MapMode.READ_ONLY, 0, fc.size());
 			Indexer indexer = new Indexer(new BufferedInputStream(new FileInputStream(inputFile), (int)Math.pow(2, 20)));
 			IndexerEventListener luceneIndexerListener = new LuceneIndexerEventHandler(getIndexDir());
 			indexer.addEventListener(luceneIndexerListener);
@@ -164,19 +164,23 @@ public class BZip2Store implements Store<WikiPage, String> {
 			logger.log(Level.SEVERE, "", e);
 		}
 
-		try {
-			synchronized (bzin) {
-				//skip in the compressed bzip2 file to the given block
-				bzin.skipToBlockAt(blockPositionInBits);
-				// skip in the uncompressed output to the correct position
-				bzin.skip(pageUncompressedPosition - blockUncompressedPosition);
+		File baseFile = OfflineWiki.getInstance().getXmlDumpFile();
+		try (
+//				SplitFileInputStream fis = new SplitFileInputStream(splitFile, Config.SPLIT_SIZE);
+				FileInputStream fis = new FileInputStream(baseFile);
+				BufferInputStream in = new BufferInputStream(fis);
+				BZip2CompressorInputStream bZip2In = new BZip2CompressorInputStream(in, false);) {
+			bZip2In.read();
 
-				try (PageRetriever pr = new PageRetriever(bzin)) {
-					return pr.getNext();
-				} catch (IOException ex) {
-					logger.log(Level.SEVERE, "", ex);
-				}
-			}
+			fis.getChannel().position(blockPositionInBits / 8); // position underlying file to the bzip2 block start
+			in.clearBuffer(); // clear buffer content
+			bZip2In.resetBlock((byte) (blockPositionInBits % 8)); // consume superfluous bits
+			// skip to next page; set uncompressed byte position
+			long nextPagePos = pageUncompressedPosition - blockUncompressedPosition;
+			bZip2In.skip(nextPagePos);
+			PageRetriever pr = new PageRetriever(bZip2In);
+			WikiPage page = pr.getNext();
+			return page;
 		} catch(IOException e) {
 			logger.log(Level.SEVERE, "", e);
 		}
@@ -184,22 +188,9 @@ public class BZip2Store implements Store<WikiPage, String> {
 	}
 
 	@Override
-	public void open() {
-		File baseFile = OfflineWiki.getInstance().getXmlDumpFile();
-		try {
-			bzin = new BZip2RandomInputStream(baseFile);
-		} catch (IOException e) {
-			logger.log(Level.SEVERE, "", e);
-		}
-	}
+	public void open() {}
 
 	@Override
 	public void close() {
-		try {
-			if(bzin != null)
-				bzin.close();
-		} catch(IOException e) {
-			logger.log(Level.SEVERE, "Failed!", e);
-		}
 	}
 }
