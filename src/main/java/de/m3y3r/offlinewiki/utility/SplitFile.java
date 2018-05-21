@@ -16,6 +16,10 @@ public class SplitFile /*extends File*/ {
 	private final Logger log;
 
 	public SplitFile(File targetDir, String baseName) {
+		if(!targetDir.exists() || !targetDir.isDirectory()) {
+			throw new IllegalArgumentException();
+		}
+
 		this.baseName = baseName;
 		this.baseDir = targetDir;
 		this.log = Logger.getLogger(Config.LOGGER_NAME);

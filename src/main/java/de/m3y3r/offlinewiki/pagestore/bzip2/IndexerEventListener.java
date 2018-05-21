@@ -4,9 +4,7 @@ public interface IndexerEventListener {
 
 	public void onPageStart(IndexerEvent event);
 
-	public void onNewBlock(IndexerEvent event, long blockPositionInBits);
-
-	public void onEndOfStream(IndexerEvent event);
+	public void onEndOfStream(IndexerEvent event, boolean filePos);
 
 	public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos);
 

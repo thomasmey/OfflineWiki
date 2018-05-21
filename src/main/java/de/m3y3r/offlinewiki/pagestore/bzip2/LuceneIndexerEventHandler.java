@@ -47,7 +47,7 @@ public class LuceneIndexerEventHandler implements IndexerEventListener {
 	}
 
 	@Override
-	public void onEndOfStream(IndexerEvent event) {
+	public void onEndOfStream(IndexerEvent event, boolean normalEnd) {
 		try {
 			index.commit();
 			index.close();
@@ -82,9 +82,7 @@ public class LuceneIndexerEventHandler implements IndexerEventListener {
 			logger.log(Level.INFO, "Longest title \"{0}\" with size {1}", new Object[] {title, maxTitleLen});
 		}
 
-		Entry<Long, Long> e = indexer.getBlockStartPosition(currentTagUncompressedPosition);
-		long blockUncompressedPosition = e.getKey();
-		long blockPositionInBits = e.getValue();
+		long blockPositionInBits = indexer.getBlockStartPosition();
 
 		Document d = new Document();
 		d.add(new StringField("title", title, Field.Store.YES));
@@ -92,16 +90,12 @@ public class LuceneIndexerEventHandler implements IndexerEventListener {
 
 		d.add(new LongPoint("pageUncompressedPosition", currentTagUncompressedPosition));
 		d.add(new StoredField("pageUncompressedPosition", currentTagUncompressedPosition));
-		d.add(new LongPoint("blockUncompressedPosition", blockUncompressedPosition));
-		d.add(new StoredField("blockUncompressedPosition", blockUncompressedPosition));
+//		d.add(new LongPoint("blockUncompressedPosition", blockUncompressedPosition));
+//		d.add(new StoredField("blockUncompressedPosition", blockUncompressedPosition));
 		d.add(new LongPoint("blockPositionInBits", blockPositionInBits));
 		d.add(new StoredField("blockPositionInBits", blockPositionInBits));
 
 		index.addDocument(d);
 	}
-
-	@Override
-	public void onNewBlock(IndexerEvent event, long blockPositionInBits) {
-	}
-
 }
+

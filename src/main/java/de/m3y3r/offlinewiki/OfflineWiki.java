@@ -5,21 +5,35 @@
 package de.m3y3r.offlinewiki;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.EventObject;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.xml.stream.XMLStreamException;
+
 import de.m3y3r.offlinewiki.frontend.swing.SwingDriver;
 import de.m3y3r.offlinewiki.pagestore.Store;
 import de.m3y3r.offlinewiki.pagestore.bzip2.BZip2Store;
+import de.m3y3r.offlinewiki.pagestore.bzip2.BlockFinder;
+import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.IndexerController;
+import de.m3y3r.offlinewiki.utility.DownloadEventListener;
+import de.m3y3r.offlinewiki.utility.Downloader;
+import de.m3y3r.offlinewiki.utility.SplitFile;
 
 public class OfflineWiki implements Runnable {
 
 	private final Store<WikiPage, String> pageStore;
-	private final File xmlDumpFile;
+	private final Properties config;
 	private final ExecutorService threadPool;
 	private final Logger log;
 	private final Runnable interactionDriver;
@@ -33,21 +47,26 @@ public class OfflineWiki implements Runnable {
 	 * @throws XMLStreamException 
 	 */
 	public static void main(String[] args) {
-
-		if(args.length < 1) {
-			System.err.println("arg[0] = filename of uncompressed xml dump missing!");
-			System.exit(4);
-		}
-
-		new OfflineWiki(args[0]).run();
+		new OfflineWiki().run();
 	}
 
-	public OfflineWiki(String fileName) {
+	private OfflineWiki() {
 		instance = this;
-		log = Logger.getLogger("mainLog");
+		log = Logger.getLogger(Config.LOGGER_NAME);
 		threadPool = Executors.newCachedThreadPool();
 
-		xmlDumpFile = new File(fileName);
+		config = new Properties();
+		try(InputStream inDefault = this.getClass().getResourceAsStream("/config.xml")) {
+			config.loadFromXML(inDefault);
+		} catch (NullPointerException | IOException e) {
+			e.printStackTrace();
+		}
+		try(InputStream inState = new FileInputStream(new File("config.xml"))) {
+			config.loadFromXML(inState);
+		} catch (NullPointerException | IOException e) {
+			e.printStackTrace();
+		}
+
 		pageStore = new BZip2Store();
 
 		interactionDriverLatch = new CountDownLatch(1);
@@ -65,8 +84,15 @@ public class OfflineWiki implements Runnable {
 		return pageStore;
 	}
 
-	public File getXmlDumpFile() {
-		return xmlDumpFile;
+	public SplitFile getXmlDumpFile() {
+		String xmlDumpUrl = config.getProperty("xmlDumpUrl");
+		if(xmlDumpUrl == null)
+			return null;
+
+		File targetDir = new File(".");
+		String baseName = Downloader.getBaseNameFromUrl(xmlDumpUrl);
+		SplitFile targetDumpFile = new SplitFile(targetDir, baseName);
+		return targetDumpFile;
 	}
 
 	public ExecutorService getThreadPool() {
@@ -76,25 +102,64 @@ public class OfflineWiki implements Runnable {
 	@Override
 	public void run() {
 
-		if (!pageStore.exists()) {
-			log.log(Level.INFO, "Creating index files. Sadly this takes very long, please be patient!");
-			// run index process in parallel
-			threadPool.execute(() -> pageStore.convert());
+		if(!Boolean.parseBoolean(config.getProperty("downloadFinished"))) {
+			String xmlDumpUrl = config.getProperty("xmlDumpUrl", config.getProperty("defaultXmlDumpUrl"));
+			File targetDir = new File(".");
+			String baseName = Downloader.getBaseNameFromUrl(xmlDumpUrl);
+			SplitFile targetDumpFile = new SplitFile(targetDir, baseName);
+			boolean isRestart = Boolean.parseBoolean(config.getProperty("downloadIsRestart"));
+			BlockFinder blockFinder = new BlockFinder();
+			File blockFile = new File(targetDir, baseName + ".blocks");
+			if(!isRestart)
+				blockFile.delete();
+
+			try {
+				//TODO: Buffer size is aligned to be SD card friendly, is 4MB okay?
+				final int bufferSize = (int) Math.pow(2, 22);
+				Downloader downloader = new Downloader(xmlDumpUrl, targetDumpFile, isRestart, bufferSize, blockFinder);
+				Map<String, List<String>> headers = downloader.doHead();
+				long targetFileSize = Downloader.getFileSizeFromHeaders(headers);
+
+				IndexerController ic = new IndexerController(targetDumpFile);
+				FileBasedBlockController el = new FileBasedBlockController(blockFile);
+				blockFinder.addEventListener(el);
+				DownloadEventListener del = new DownloadEventListener() {
+					@Override
+					public void onProgress(EventObject event, long currentFileSize) {
+						try {
+							el.flush();
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+					}
+					@Override
+					public void onDownloadStart(EventObject event) {}
+					@Override
+					public void onDownloadFinished(EventObject event) {
+						try {
+							el.close();
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+					}
+				};
+				downloader.addEventListener(del);
+				threadPool.execute(downloader);
+			} catch(IOException e) {
+				e.printStackTrace();
+			}
 		}
-		pageStore.open();
 
 		threadPool.execute(interactionDriver);
 
 		// wait for interaction driver to finish
-		try {
+		try(Store<WikiPage,String> ps = this.pageStore) {
 			interactionDriverLatch.await();
-		} catch (InterruptedException e) {
+		} catch (InterruptedException | IOException e) {
 			log.log(Level.SEVERE, "wait for interaction driver to finish was interruppted!", e);
+		} finally {
+			// shutdown pool
+			threadPool.shutdown();
 		}
-
-		pageStore.close();
-
-		// shutdown pool
-		threadPool.shutdown();
 	}
 }

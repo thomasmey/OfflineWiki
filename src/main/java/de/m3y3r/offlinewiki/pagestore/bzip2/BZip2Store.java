@@ -4,9 +4,7 @@
 
 package de.m3y3r.offlinewiki.pagestore.bzip2;
 
-import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,32 +28,17 @@ import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.FSDirectory;
 
-import de.m3y3r.offlinewiki.Config;
 import de.m3y3r.offlinewiki.OfflineWiki;
 import de.m3y3r.offlinewiki.PageRetriever;
 import de.m3y3r.offlinewiki.WikiPage;
 import de.m3y3r.offlinewiki.pagestore.Store;
 import de.m3y3r.offlinewiki.utility.BufferInputStream;
-import de.m3y3r.offlinewiki.utility.SplitFileInputStream;
+import de.m3y3r.offlinewiki.utility.Bzip2BlockInputStream;
+import de.m3y3r.offlinewiki.utility.SplitFile;
 
 public class BZip2Store implements Store<WikiPage, String> {
 
 	private Logger logger = Logger.getLogger(BZip2Store.class.getName());
-
-	@Override
-	public boolean exists() {
-		boolean rc = false;
-		File baseFile = OfflineWiki.getInstance().getXmlDumpFile();
-		if(baseFile.exists() &&
-				baseFile.isFile() &&
-				baseFile.getParentFile().listFiles(
-						(d, fn) -> {if(fn.startsWith(baseFile.getName()) && fn.endsWith(".index")) return true; else return false;})
-				.length > 0) {
-			rc = true;
-		}
-
-		return rc;
-	}
 
 	@Override
 	public List<String> getIndexKeyAscending(int noMaxHits, String indexKey) {
@@ -108,24 +91,9 @@ public class BZip2Store implements Store<WikiPage, String> {
 	}
 
 	private File getIndexDir() {
-		File inputFile = OfflineWiki.getInstance().getXmlDumpFile();
-		File df = new File(inputFile.getParentFile(), inputFile.getName() + ".index");
+		SplitFile inputFile = OfflineWiki.getInstance().getXmlDumpFile();
+		File df = new File(inputFile.getParentFile(), inputFile.getBaseName() + ".index");
 		return df;
-	}
-
-	@Override
-	public void convert() {
-		try {
-			File inputFile = OfflineWiki.getInstance().getXmlDumpFile();
-			//			FileChannel fc = FileChannel.open(inputFile.toPath());
-			//			ByteBuffer byteBuffer = fc.map(MapMode.READ_ONLY, 0, fc.size());
-			Indexer indexer = new Indexer(new BufferedInputStream(new FileInputStream(inputFile), (int)Math.pow(2, 20)));
-			IndexerEventListener luceneIndexerListener = new LuceneIndexerEventHandler(getIndexDir());
-			indexer.addEventListener(luceneIndexerListener);
-			indexer.run();
-		} catch(IOException e) {
-
-		}
 	}
 
 	@Override
@@ -136,8 +104,8 @@ public class BZip2Store implements Store<WikiPage, String> {
 		long pageUncompressedPosition = 0;
 
 		// get title and offset in uncompressed stream
-		File inputFile = OfflineWiki.getInstance().getXmlDumpFile();
-		File df = new File(inputFile.getParentFile(), inputFile.getName() + ".index");
+		SplitFile inputFile = OfflineWiki.getInstance().getXmlDumpFile();
+		File df = new File(inputFile.getParentFile(), inputFile.getBaseName() + ".index");
 
 		try(IndexReader reader = DirectoryReader.open(FSDirectory.open(df.toPath()));) {
 			IndexSearcher searcher = new IndexSearcher(reader);
@@ -164,18 +132,13 @@ public class BZip2Store implements Store<WikiPage, String> {
 			logger.log(Level.SEVERE, "", e);
 		}
 
-		File baseFile = OfflineWiki.getInstance().getXmlDumpFile();
+		SplitFile baseFile = OfflineWiki.getInstance().getXmlDumpFile();
 		try (
-//				SplitFileInputStream fis = new SplitFileInputStream(splitFile, Config.SPLIT_SIZE);
-				FileInputStream fis = new FileInputStream(baseFile);
-				BufferInputStream in = new BufferInputStream(fis);
+				Bzip2BlockInputStream bbin = new Bzip2BlockInputStream(baseFile, blockPositionInBits, Long.MAX_VALUE);
+				BufferInputStream in = new BufferInputStream(bbin);
 				BZip2CompressorInputStream bZip2In = new BZip2CompressorInputStream(in, false);) {
-			bZip2In.read();
-
-			fis.getChannel().position(blockPositionInBits / 8); // position underlying file to the bzip2 block start
-			in.clearBuffer(); // clear buffer content
-			bZip2In.resetBlock((byte) (blockPositionInBits % 8)); // consume superfluous bits
 			// skip to next page; set uncompressed byte position
+			// i.e. the position relative to block start
 			long nextPagePos = pageUncompressedPosition - blockUncompressedPosition;
 			bZip2In.skip(nextPagePos);
 			PageRetriever pr = new PageRetriever(bZip2In);
@@ -186,9 +149,6 @@ public class BZip2Store implements Store<WikiPage, String> {
 		}
 		return null;
 	}
-
-	@Override
-	public void open() {}
 
 	@Override
 	public void close() {

@@ -1,0 +1,7 @@
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+	<comment></comment>
+	<entry key="defaultXmlDumpUrl">https://dumps.wikimedia.org/dewiki/latest/dewiki-latest-pages-articles.xml.bz2</entry>
+	<entry key="downloadFinished">false</entry>
+	<entry key="downloadIsRestart">false</entry>
+</properties>

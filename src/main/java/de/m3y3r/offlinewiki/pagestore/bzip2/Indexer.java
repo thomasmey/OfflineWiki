@@ -6,23 +6,15 @@ package de.m3y3r.offlinewiki.pagestore.bzip2;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.TreeMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.commons.compress.compressors.CompressorEvent;
-import org.apache.commons.compress.compressors.CompressorEventListener;
-import org.apache.commons.compress.compressors.CompressorInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
 import de.m3y3r.offlinewiki.Config;
 import de.m3y3r.offlinewiki.Utf8Reader;
-import de.m3y3r.offlinewiki.utility.ByteBufferInputStream;
 import de.m3y3r.offlinewiki.utility.HtmlUtility;
 
 public class Indexer implements Runnable {
@@ -32,94 +24,54 @@ public class Indexer implements Runnable {
 	private final Logger logger;
 	private final List<IndexerEventListener> eventListeners;
 
-	/** bzip2 stream mapping: block starts: uncompressed position, position in bits*/
-	private TreeMap<Long,Long> bzip2Blocks;
-
-	/** current bzip2 block number */
-	private long offsetBlockUncompressedPosition;
-	private long offsetBlockPositionInBits;
-
 	private InputStream inputStream;
 
-	public Indexer(InputStream InputStream) {
+	private long blockStartPosInBits;
 
+	public Indexer(InputStream InputStream, long blockStartPosInBits) {
 		this.inputStream = InputStream;
-
+		this.blockStartPosInBits = blockStartPosInBits;
 		this.logger = Logger.getLogger(Config.LOGGER_NAME);
-		this.bzip2Blocks = new TreeMap<>();
 		this.eventListeners = new CopyOnWriteArrayList<>();
 	}
+
+	private static enum ParserMode { CHARACTERS, TAG_NAME_OPEN, TAG_NAME_CLOSE, TAG_ATTRIBUTE, SINGLE_TAG, ATTRIBUTE_ASSIGNMENT };
 
 	// we need to do the XML parsing ourselves to get a connection between the current element file offset
 	// and the parser state...
 	public void run() {
 
-		Map<Integer,StringBuilder> levelNameMap = new HashMap<>();
-		int level = 0;
+		StringBuilder[] levelName = new StringBuilder[8];
+		int levelSize = 0;
 
 		StringBuilder sbElement = null;
 		char[] sbChar = new char[XML_BUFFER_SIZE];
 		int sbCharPos = 0;
 		long currentTagStartPos = 0;
 		long currentTagEndPos = 0;
+		String currentTag = null;
 		long pageTagStartPos = 0;
-		int currentMode = 0, nextMode = 0; // FIXME: change to enum
+		ParserMode currentMode = ParserMode.CHARACTERS, nextMode = ParserMode.CHARACTERS; // FIXME: change to enum
+		boolean syncPageTag = true;
+
+		boolean normalEnd = false;
 
 		int currentChar;
-
 		try (
 				BZip2CompressorInputStream bZip2In = new BZip2CompressorInputStream(inputStream, false);
 				Utf8Reader utf8Reader = new Utf8Reader(bZip2In)) {
 
-			CompressorEventListener listener = e -> {
-				if(e.getEventType() == CompressorEvent.EventType.NEW_BLOCK) {
-					long blockUncompressedPosition = ((CompressorInputStream) e.getSource()).getBytesRead() + offsetBlockUncompressedPosition;
-					long blockPositionInBits = e.getBitsProcessed() + offsetBlockPositionInBits;
-					if(e.getEventCounter() % 100 == 0) {
-						logger.log(Level.INFO,"Bzip2 block no. {0} at {1} uncompressed at {2}", new Object[] {e.getEventCounter(), blockPositionInBits / 8, blockUncompressedPosition });
-					}
-					synchronized (bzip2Blocks) {
-						bzip2Blocks.put(blockUncompressedPosition, blockPositionInBits);
-					}
-					fireEventNewBlock(blockPositionInBits);
-				}
-			};
-			bZip2In.addCompressorEventListener(listener);
-
-			// read first; the read must happen here, so the bzip2 header is consumed.
 			currentChar = utf8Reader.read();
-
-//			// restart indexing from the last position
-//			if(currentChar >= 0 && restarBlockPositionInBits != null) {
-//				long posInBits = restarBlockPositionInBits;
-//				fis.seek(posInBits / 8); // position underlying file to the bzip2 block start
-//				in.clearBuffer(); // clear buffer content
-//				bZip2In.resetBlock((byte) (posInBits % 8)); // consume superfluous bits
-//
-//				// fix internal state of Bzip2CompressorInputStream
-//				offsetBlockPositionInBits = restarBlockPositionInBits / 8 * 8; // throw away superfluous bits
-//				offsetBlockUncompressedPosition = restartBlockPositionUncompressed;
-//
-//				// skip to next page; set uncompressed byte position
-//				long nextPagePos = restartPagePositionUncompressed - restartBlockPositionUncompressed;
-//				bZip2In.skip(nextPagePos);
-//				utf8Reader.setCurrentFilePos(restartPagePositionUncompressed);
-//				currentChar = utf8Reader.read(); // read first character from bzip2 block
-//				// fix-up levelNameMap, we are at a new <page> now, create fake level 0 entry
-//				levelNameMap.put(1, new StringBuilder("mediawiki"));
-//				level++;
-//			}
-
 			while(currentChar >= 0) {
 				if(Thread.interrupted())
 					return;
 
 				switch (currentMode) {
-				case 0: // characters
+				case CHARACTERS:
 
 					if(currentChar == '<') {
 						sbElement = new StringBuilder(32);
-						nextMode = 1;
+						nextMode = ParserMode.TAG_NAME_OPEN;
 						currentTagStartPos = utf8Reader.getCurrentFilePos() - 1;
 						break;
 					}
@@ -131,74 +83,86 @@ public class Indexer implements Runnable {
 					}
 					break;
 
-				case 1: // element name open
+				case TAG_NAME_OPEN: // element name open
 					if(currentChar == '/') {
-						nextMode = 2;
+						nextMode = ParserMode.TAG_NAME_CLOSE;
 						break;
 					}
 					if(currentChar == ' ') {
-						nextMode = 3;
+						nextMode = ParserMode.TAG_ATTRIBUTE;
 						break;
 					}
 					if(currentChar == '>') {
-						level++;
-						levelNameMap.put(level, sbElement);
+						currentTag = sbElement.toString();
+						levelName[levelSize] = sbElement;
+						levelSize++;
 						sbCharPos = 0;
-						nextMode = 0;
+						nextMode = ParserMode.CHARACTERS;
 						break;
 					}
 					sbElement.appendCodePoint(currentChar);
 					break;
-				case 2: // element name close
+				case TAG_NAME_CLOSE: // element name close
 					if(currentChar == '>') {
-						levelNameMap.remove(level);
-						level--;
+						levelSize--;
+						if(levelSize < 0)
+							levelSize = 0;
 						sbCharPos = 0;
-						nextMode = 0;
+						nextMode = ParserMode.CHARACTERS;
 						currentTagEndPos = utf8Reader.getCurrentFilePos();
 						break;
 					}
 					sbElement.appendCodePoint(currentChar);
 					break;
-				case 3: // element attributes
+				case TAG_ATTRIBUTE: // element attributes
 					if(currentChar == '"') {
-						nextMode = 5;
+						nextMode = ParserMode.ATTRIBUTE_ASSIGNMENT;
 						break;
 					}
 
 					if(currentChar == '/') {
-						nextMode = 4;
+						nextMode = ParserMode.SINGLE_TAG;
 						break;
 					}
 
 					if(currentChar == '>') {
-						level++;
-						levelNameMap.put(level, sbElement);
+						levelName[levelSize] = sbElement;
+						levelSize++;
 						sbCharPos = 0;
-						nextMode = 0;
+						nextMode = ParserMode.CHARACTERS;
 						break;
 					}
 					break;
-				case 4: // single element
+				case SINGLE_TAG: // single element
 					if(currentChar == '>') {
 						sbCharPos = 0;
-						nextMode = 0;
+						nextMode = ParserMode.CHARACTERS;
 						break;
 					}
 
-				case 5: // attribute assignment
+				case ATTRIBUTE_ASSIGNMENT: // attribute assignment
 					if(currentChar == '"') {
-						nextMode = 3;
+						nextMode = ParserMode.TAG_ATTRIBUTE;
 						break;
 					}
 				}
 
-				if(currentMode == 1) { // element/tag name open
-					if(nextMode == 0 && level == 2 && levelNameMap.get(2).toString().equals("page")) {
-						// start of <page> tag - save this position
-						pageTagStartPos = currentTagStartPos;
+				if(currentMode == ParserMode.TAG_NAME_OPEN) { // element/tag name open
+					if(nextMode == ParserMode.CHARACTERS) {
+						if(syncPageTag) {
+							if("page".equals(currentTag)) {
+								// sync levelNameMap and level with current state
+//								levelSize = 0;
+//								levelNameMap.put(level, currentTag);
+								syncPageTag = false;
+							}
+						}
+						if(levelSize == 1 && levelName[0].toString().equals("page")) {
+							// start of <page> tag - save this position
+							pageTagStartPos = currentTagStartPos;
+						}
 					}
-					if(nextMode == 2 && level == 3 && levelNameMap.get(2).toString().equals("page") && levelNameMap.get(3).toString().equals("title")) {
+					if(nextMode == ParserMode.TAG_NAME_CLOSE && levelSize == 2 && levelName[0].toString().equals("page") && levelName[1].toString().equals("title")) {
 						StringBuilder sb = new StringBuilder(256);
 						for(int i=0; i< sbCharPos; i++) {
 							sb.appendCodePoint(sbChar[i]);
@@ -206,8 +170,8 @@ public class Indexer implements Runnable {
 						String title = HtmlUtility.decodeEntities(sb);
 						fireEventNewTitle(title, pageTagStartPos);
 					}
-				} else if(currentMode == 2) {
-					if(nextMode == 0 && level == 1) {
+				} else if(currentMode == ParserMode.TAG_NAME_CLOSE) {
+					if(!syncPageTag && nextMode == ParserMode.CHARACTERS && levelSize == 1) {
 						fireEventTagEnd(currentTagEndPos);
 					}
 				}
@@ -218,25 +182,20 @@ public class Indexer implements Runnable {
 				currentChar = utf8Reader.read();
 			}
 
-			// store remaining buffer item
-			fireEventEndOfStream();
+			normalEnd = true;
 
 		} catch (IOException e) {
 			logger.log(Level.SEVERE, "failed!", e);
+		} finally {
+			// finished execution, give listener the change to clean-up
+			fireEventEndOfStream(normalEnd);
 		}
 	}
 
-	private void fireEventNewBlock(long blockPositionInBits) {
+	private void fireEventEndOfStream(boolean normalEnd) {
 		IndexerEvent event = new IndexerEvent(this);
 		for(IndexerEventListener listener: eventListeners) {
-			listener.onNewBlock(event, blockPositionInBits);
-		}
-	}
-
-	private void fireEventEndOfStream() {
-		IndexerEvent event = new IndexerEvent(this);
-		for(IndexerEventListener listener: eventListeners) {
-			listener.onEndOfStream(event);
+			listener.onEndOfStream(event, normalEnd);
 		}
 	}
 
@@ -254,20 +213,11 @@ public class Indexer implements Runnable {
 		}
 	}
 
-	public Entry<Long, Long> getBlockStartPosition(long currentTagUncompressedPosition) {
-		synchronized (bzip2Blocks) {
-			Entry<Long, Long> e = bzip2Blocks.floorEntry(currentTagUncompressedPosition);
-
-			// remove all smaller entries from map
-			Long lowerKey;
-			while ((lowerKey = bzip2Blocks.lowerKey(e.getKey())) != null) {
-				bzip2Blocks.remove(lowerKey);
-			}
-			return e;
-		}
-	}
-
 	public void addEventListener(IndexerEventListener eventListener) {
 		eventListeners.add(eventListener);
+	}
+
+	public long getBlockStartPosition() {
+		return blockStartPosInBits;
 	}
 }

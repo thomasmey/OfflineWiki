@@ -11,6 +11,7 @@ public class SplitFileOutputStream extends OutputStream {
 	private final SplitFile targetFile;
 
 	private FileOutputStream out;
+
 	private int fileCount;
 	private int fileSize;
 
@@ -58,7 +59,8 @@ public class SplitFileOutputStream extends OutputStream {
 	}
 
 	private FileOutputStream open(int splitNo, boolean append) throws FileNotFoundException {
-		out = new FileOutputStream(new File(targetFile.getParentFile(), targetFile.getBaseName() + '.' + splitNo), append);
+		File nextFile = new File(targetFile.getParentFile(), targetFile.getBaseName() + '.' + splitNo);
+		out = new FileOutputStream(nextFile, append);
 		this.fileCount = splitNo;
 		return out;
 	}
@@ -68,6 +70,7 @@ public class SplitFileOutputStream extends OutputStream {
 		if(out != null) {
 			out.getFD().sync();
 			out.close();
+
 			out = null;
 		}
 	}
@@ -83,4 +86,9 @@ public class SplitFileOutputStream extends OutputStream {
 		fileSize = (int) pos; //FIXME: Is this correct, or -1?
 	}
 
+	@Override
+	public void flush() throws IOException {
+		out.flush();
+		out.getFD().sync();
+	}
 }
