@@ -26,6 +26,7 @@ import de.m3y3r.offlinewiki.pagestore.bzip2.BZip2Store;
 import de.m3y3r.offlinewiki.pagestore.bzip2.BlockFinder;
 import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController;
 import de.m3y3r.offlinewiki.pagestore.bzip2.IndexerController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.LuceneIndexerEventHandler;
 import de.m3y3r.offlinewiki.utility.DownloadEventListener;
 import de.m3y3r.offlinewiki.utility.Downloader;
 import de.m3y3r.offlinewiki.utility.SplitFile;
@@ -113,6 +114,9 @@ public class OfflineWiki implements Runnable {
 			if(!isRestart)
 				blockFile.delete();
 
+			File indexDir = new File(targetDir, baseName + ".index");
+			indexDir.mkdir();
+
 			try {
 				//TODO: Buffer size is aligned to be SD card friendly, is 4MB okay?
 				final int bufferSize = (int) Math.pow(2, 22);
@@ -120,9 +124,10 @@ public class OfflineWiki implements Runnable {
 				Map<String, List<String>> headers = downloader.doHead();
 				long targetFileSize = Downloader.getFileSizeFromHeaders(headers);
 
-				IndexerController ic = new IndexerController(targetDumpFile);
 				FileBasedBlockController el = new FileBasedBlockController(blockFile);
 				blockFinder.addEventListener(el);
+
+				IndexerController ic = new IndexerController(targetDumpFile, new LuceneIndexerEventHandler(indexDir), el);
 				DownloadEventListener del = new DownloadEventListener() {
 					@Override
 					public void onProgress(EventObject event, long currentFileSize) {
@@ -144,7 +149,8 @@ public class OfflineWiki implements Runnable {
 					}
 				};
 				downloader.addEventListener(del);
-				threadPool.execute(downloader);
+				threadPool.submit(downloader);
+				threadPool.submit(ic);
 			} catch(IOException e) {
 				e.printStackTrace();
 			}

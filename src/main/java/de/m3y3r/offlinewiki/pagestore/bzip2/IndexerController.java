@@ -1,57 +1,112 @@
 package de.m3y3r.offlinewiki.pagestore.bzip2;
 
+import java.io.Closeable;
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import de.m3y3r.offlinewiki.utility.Bzip2BlockInputStream;
 import de.m3y3r.offlinewiki.utility.SplitFile;
 
-public class IndexerController implements Runnable {
+public class IndexerController implements Runnable, Closeable {
 
 	private final SplitFile xmlDumpFile;
-	private IndexerEventListener indexerEventListener;
+	private final IndexerEventListener indexerEventListener;
+	private final ExecutorService threadPool;
+	private final Iterator<Long> blockProvider;
 
-	public IndexerController(SplitFile xmDumpFile) {
+	public IndexerController(SplitFile xmDumpFile, IndexerEventListener indexEventListener, Iterator<Long> blockProvider) {
 		this.xmlDumpFile = xmDumpFile;
+		this.indexerEventListener = indexEventListener;
+//		this.threadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+		this.threadPool = new ThreadPoolExecutor(0, Runtime.getRuntime().availableProcessors(),
+				0L, TimeUnit.MILLISECONDS,
+				new LinkedBlockingQueue<Runnable>(2));
+		this.blockProvider = blockProvider;
 	}
 
 	@Override
 	public void run() {
-//		blockNo=19045 bitPos=34667753469 - 48
-//		blockNo=19046 bitPos=34669437966
+		long fromBits = -1;
 
-		long fromBits = 34667753421l;
-		long toBits = 34669437966l;
+		if(blockProvider.hasNext())
+			fromBits = blockProvider.next();
 
-		try (Bzip2BlockInputStream stream = new Bzip2BlockInputStream(xmlDumpFile, fromBits, toBits)) {
-			Indexer indexerJob = new Indexer(stream, fromBits);
-			indexerJob.addEventListener(indexerEventListener);
-			indexerJob.run();
-		} catch (IOException e) {
-			e.printStackTrace();
+		while(blockProvider.hasNext()) {
+			long toBits = blockProvider.next();
+			try (Bzip2BlockInputStream stream = new Bzip2BlockInputStream(xmlDumpFile, fromBits, toBits + 48)) {
+				Indexer indexerJob = new Indexer(stream, fromBits);
+				indexerJob.addEventListener(indexerEventListener);
+				IndexerEventListener stopper = new IndexerEventListener() {
+					@Override
+					public void onPageTagEnd(IndexerEvent event, long currentTagEndPos) {
+						if(stream.isOverrun())
+							Thread.currentThread().interrupt();
+					}
+					@Override
+					public void onPageStart(IndexerEvent event) {
+					}
+					@Override
+					public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {
+						System.out.println("title=" + title);
+					}
+					@Override
+					public void onEndOfStream(IndexerEvent event, boolean filePos) {
+					}
+				};
+				indexerJob.addEventListener(stopper);
+
+				int retryCount = 0;
+				while(true) {
+					try {
+						threadPool.submit(indexerJob);
+						break;
+					} catch(RejectedExecutionException e) {
+						retryCount++;
+						try {
+							Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+						} catch (InterruptedException e1) {
+							e1.printStackTrace();
+						}
+					}
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			fromBits = toBits;
 		}
 	}
 
 	public void buildRestartStream() {
-//		// restart indexing from the last position
-//		if(currentChar >= 0 && restarBlockPositionInBits != null) {
-//			long posInBits = restarBlockPositionInBits;
-//			fis.seek(posInBits / 8); // position underlying file to the bzip2 block start
-//			in.clearBuffer(); // clear buffer content
-//			bZip2In.resetBlock((byte) (posInBits % 8)); // consume superfluous bits
-//
-//			// fix internal state of Bzip2CompressorInputStream
-//			offsetBlockPositionInBits = restarBlockPositionInBits / 8 * 8; // throw away superfluous bits
-//			offsetBlockUncompressedPosition = restartBlockPositionUncompressed;
-//
-//			// skip to next page; set uncompressed byte position
-//			long nextPagePos = restartPagePositionUncompressed - restartBlockPositionUncompressed;
-//			bZip2In.skip(nextPagePos);
-//			utf8Reader.setCurrentFilePos(restartPagePositionUncompressed);
-//			currentChar = utf8Reader.read(); // read first character from bzip2 block
-//			// fix-up levelNameMap, we are at a new <page> now, create fake level 0 entry
-//			levelNameMap.put(1, new StringBuilder("mediawiki"));
-//			level++;
-//		}
+		//		// restart indexing from the last position
+		//		if(currentChar >= 0 && restarBlockPositionInBits != null) {
+		//			long posInBits = restarBlockPositionInBits;
+		//			fis.seek(posInBits / 8); // position underlying file to the bzip2 block start
+		//			in.clearBuffer(); // clear buffer content
+		//			bZip2In.resetBlock((byte) (posInBits % 8)); // consume superfluous bits
+		//
+		//			// fix internal state of Bzip2CompressorInputStream
+		//			offsetBlockPositionInBits = restarBlockPositionInBits / 8 * 8; // throw away superfluous bits
+		//			offsetBlockUncompressedPosition = restartBlockPositionUncompressed;
+		//
+		//			// skip to next page; set uncompressed byte position
+		//			long nextPagePos = restartPagePositionUncompressed - restartBlockPositionUncompressed;
+		//			bZip2In.skip(nextPagePos);
+		//			utf8Reader.setCurrentFilePos(restartPagePositionUncompressed);
+		//			currentChar = utf8Reader.read(); // read first character from bzip2 block
+		//			// fix-up levelNameMap, we are at a new <page> now, create fake level 0 entry
+		//			levelNameMap.put(1, new StringBuilder("mediawiki"));
+		//			level++;
+		//		}
+	}
+
+	@Override
+	public void close() throws IOException {
+		threadPool.shutdown();
 	}
 }
 

@@ -152,8 +152,8 @@ public class Indexer implements Runnable {
 						if(syncPageTag) {
 							if("page".equals(currentTag)) {
 								// sync levelNameMap and level with current state
-//								levelSize = 0;
-//								levelNameMap.put(level, currentTag);
+								levelSize = 1;
+								levelName[0] = new StringBuilder("page");
 								syncPageTag = false;
 							}
 						}
@@ -184,7 +184,7 @@ public class Indexer implements Runnable {
 
 			normalEnd = true;
 
-		} catch (IOException e) {
+		} catch (Exception e) {
 			logger.log(Level.SEVERE, "failed!", e);
 		} finally {
 			// finished execution, give listener the change to clean-up

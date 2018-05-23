@@ -2,7 +2,6 @@ package de.m3y3r.offlinewiki.pagestore.bzip2;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -31,7 +30,7 @@ public class LuceneIndexerEventHandler implements IndexerEventListener {
 
 	private IndexWriter index;
 	private int maxTitleLen;
-	private int titleCount = 0;
+	private int titleCount;
 	private final Logger logger;
 
 	public LuceneIndexerEventHandler(File indexDir) throws IOException {
@@ -50,7 +49,7 @@ public class LuceneIndexerEventHandler implements IndexerEventListener {
 	public void onEndOfStream(IndexerEvent event, boolean normalEnd) {
 		try {
 			index.commit();
-			index.close();
+//			index.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -60,11 +59,10 @@ public class LuceneIndexerEventHandler implements IndexerEventListener {
 	public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {
 		try {
 			addToIndex((Indexer) event.getSource(), index, title, pageTagStartPos);
-			titleCount++;
-			if(titleCount % 1000 == 0) {
-				logger.log(Level.FINE,"Processed {0} pages", titleCount);
-				index.commit();
-			}
+//			if(titleCount % 1000 == 0) {
+//				logger.log(Level.FINE,"Processed {0} pages", titleCount);
+//				index.commit();
+//			}
 		} catch(IOException e) {
 			logger.log(Level.SEVERE, "Adding title to index failed!", e);
 		}
@@ -77,9 +75,12 @@ public class LuceneIndexerEventHandler implements IndexerEventListener {
 	private void addToIndex(Indexer indexer, IndexWriter index, String pageTitel, long currentTagUncompressedPosition) throws IOException {
 
 		String title = pageTitel;
-		if(title.length() > maxTitleLen) {
-			maxTitleLen = title.length();
-			logger.log(Level.INFO, "Longest title \"{0}\" with size {1}", new Object[] {title, maxTitleLen});
+		synchronized (this) {
+			titleCount++;
+			if(title.length() > maxTitleLen) {
+				maxTitleLen = title.length();
+				logger.log(Level.INFO, "Longest title \"{0}\" with size {1}", new Object[] {title, maxTitleLen});
+			}
 		}
 
 		long blockPositionInBits = indexer.getBlockStartPosition();
