@@ -91,8 +91,8 @@ public class BZip2Store implements Store<WikiPage, String> {
 	}
 
 	private File getIndexDir() {
-		SplitFile inputFile = OfflineWiki.getInstance().getXmlDumpFile();
-		File df = new File(inputFile.getParentFile(), inputFile.getBaseName() + ".index");
+		String id = OfflineWiki.getInstance().getConfig().getProperty("indexDir");
+		File df = new File(id);
 		return df;
 	}
 
@@ -121,11 +121,6 @@ public class BZip2Store implements Store<WikiPage, String> {
 			{
 				IndexableField field = document.getField("pageUncompressedPosition");
 				pageUncompressedPosition = field.numericValue().longValue();
-			}
-
-			{
-				IndexableField field = document.getField("blockUncompressedPosition");
-				blockUncompressedPosition = field.numericValue().longValue();
 			}
 
 		} catch(IOException e) {

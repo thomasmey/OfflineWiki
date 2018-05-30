@@ -3,5 +3,5 @@
 	<comment></comment>
 	<entry key="defaultXmlDumpUrl">https://dumps.wikimedia.org/dewiki/latest/dewiki-latest-pages-articles.xml.bz2</entry>
 	<entry key="downloadFinished">false</entry>
-	<entry key="downloadIsRestart">false</entry>
+	<entry key="firstStart">true</entry>
 </properties>

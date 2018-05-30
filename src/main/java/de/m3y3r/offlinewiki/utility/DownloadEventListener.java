@@ -10,4 +10,6 @@ public interface DownloadEventListener {
 
 	void onDownloadStart(EventObject event);
 
+	void onNewByte(EventObject event, int b);
+
 }

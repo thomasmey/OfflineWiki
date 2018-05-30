@@ -9,6 +9,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.BlockEntry;
 import de.m3y3r.offlinewiki.utility.Bzip2BlockInputStream;
 import de.m3y3r.offlinewiki.utility.SplitFile;
 
@@ -17,9 +18,9 @@ public class IndexerController implements Runnable, Closeable {
 	private final SplitFile xmlDumpFile;
 	private final IndexerEventListener indexerEventListener;
 	private final ExecutorService threadPool;
-	private final Iterator<Long> blockProvider;
+	private final Iterator<BlockEntry> blockProvider;
 
-	public IndexerController(SplitFile xmDumpFile, IndexerEventListener indexEventListener, Iterator<Long> blockProvider) {
+	public IndexerController(SplitFile xmDumpFile, IndexerEventListener indexEventListener, Iterator<BlockEntry> blockProvider) {
 		this.xmlDumpFile = xmDumpFile;
 		this.indexerEventListener = indexEventListener;
 //		this.threadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -31,15 +32,18 @@ public class IndexerController implements Runnable, Closeable {
 
 	@Override
 	public void run() {
-		long fromBits = -1;
+		BlockEntry fromBits = null;
 
 		if(blockProvider.hasNext())
 			fromBits = blockProvider.next();
 
 		while(blockProvider.hasNext()) {
-			long toBits = blockProvider.next();
-			try (Bzip2BlockInputStream stream = new Bzip2BlockInputStream(xmlDumpFile, fromBits, toBits + 48)) {
-				Indexer indexerJob = new Indexer(stream, fromBits);
+			if(Thread.interrupted())
+				return;
+
+			BlockEntry toBits = blockProvider.next();
+			try (Bzip2BlockInputStream stream = new Bzip2BlockInputStream(xmlDumpFile, fromBits.readCountBits, toBits.readCountBits + 48)) {
+				Indexer indexerJob = new Indexer(stream, fromBits.readCountBits);
 				indexerJob.addEventListener(indexerEventListener);
 				IndexerEventListener stopper = new IndexerEventListener() {
 					@Override
@@ -52,7 +56,7 @@ public class IndexerController implements Runnable, Closeable {
 					}
 					@Override
 					public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {
-						System.out.println("title=" + title);
+//						System.out.println("title=" + title);
 					}
 					@Override
 					public void onEndOfStream(IndexerEvent event, boolean filePos) {

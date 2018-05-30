@@ -139,7 +139,6 @@ class ResultViewer implements Runnable {
 	public void run() {
 		final WikiPage page = OfflineWiki.getInstance().getPageStore().retrieveByIndexKey(title);
 		SwingUtilities.invokeLater(new Runnable() {
-			
 			@Override
 			public void run() {
 				WikiPageWindow window = new WikiPageWindow(page);
@@ -147,5 +146,4 @@ class ResultViewer implements Runnable {
 			}
 		});
 	}
-
 }

@@ -6,8 +6,13 @@ package de.m3y3r.offlinewiki;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.EventObject;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +30,7 @@ import de.m3y3r.offlinewiki.pagestore.Store;
 import de.m3y3r.offlinewiki.pagestore.bzip2.BZip2Store;
 import de.m3y3r.offlinewiki.pagestore.bzip2.BlockFinder;
 import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.BlockEntry;
 import de.m3y3r.offlinewiki.pagestore.bzip2.IndexerController;
 import de.m3y3r.offlinewiki.pagestore.bzip2.LuceneIndexerEventHandler;
 import de.m3y3r.offlinewiki.utility.DownloadEventListener;
@@ -39,6 +45,9 @@ public class OfflineWiki implements Runnable {
 	private final Logger log;
 	private final Runnable interactionDriver;
 	private final CountDownLatch interactionDriverLatch;
+
+	private File configFile;
+
 	private static OfflineWiki instance;
 
 	/**
@@ -56,13 +65,16 @@ public class OfflineWiki implements Runnable {
 		log = Logger.getLogger(Config.LOGGER_NAME);
 		threadPool = Executors.newCachedThreadPool();
 
-		config = new Properties();
+		Properties configDefaults = new Properties();
 		try(InputStream inDefault = this.getClass().getResourceAsStream("/config.xml")) {
-			config.loadFromXML(inDefault);
+			configDefaults.loadFromXML(inDefault);
 		} catch (NullPointerException | IOException e) {
 			e.printStackTrace();
 		}
-		try(InputStream inState = new FileInputStream(new File("config.xml"))) {
+		configFile = new File("config.xml");
+
+		config = new Properties(configDefaults);
+		try(InputStream inState = new FileInputStream(configFile)) {
 			config.loadFromXML(inState);
 		} catch (NullPointerException | IOException e) {
 			e.printStackTrace();
@@ -72,8 +84,8 @@ public class OfflineWiki implements Runnable {
 
 		interactionDriverLatch = new CountDownLatch(1);
 
-//		interactionDriver = new ConsoleDriver();
-//		interactionDriver = new StdInOutDriver();
+		//		interactionDriver = new ConsoleDriver();
+		//		interactionDriver = new StdInOutDriver();
 		interactionDriver = new SwingDriver(interactionDriverLatch);
 	}
 
@@ -103,36 +115,63 @@ public class OfflineWiki implements Runnable {
 	@Override
 	public void run() {
 
-		if(!Boolean.parseBoolean(config.getProperty("downloadFinished"))) {
+		if(Boolean.parseBoolean(config.getProperty("firstStart"))) {
 			String xmlDumpUrl = config.getProperty("xmlDumpUrl", config.getProperty("defaultXmlDumpUrl"));
+			config.setProperty("xmlDumpUrl", xmlDumpUrl);
+			config.setProperty("firstStart", "false");
+			commitConfig();
+		}
+
+		if(!Boolean.parseBoolean(config.getProperty("downloadFinished"))) {
+			String xmlDumpUrl = config.getProperty("xmlDumpUrl");
 			File targetDir = new File(".");
 			String baseName = Downloader.getBaseNameFromUrl(xmlDumpUrl);
 			SplitFile targetDumpFile = new SplitFile(targetDir, baseName);
-			boolean isRestart = Boolean.parseBoolean(config.getProperty("downloadIsRestart"));
-			BlockFinder blockFinder = new BlockFinder();
+
+			//FIXME: isRestart must not be true when etag of wiki dump file did change
+			boolean isRestart = true;
+
+			BlockEntry restartPos = null;
 			File blockFile = new File(targetDir, baseName + ".blocks");
 			if(!isRestart)
 				blockFile.delete();
+			else {
+				restartPos = FileBasedBlockController.getLastEntry(blockFile);
+			}
 
 			File indexDir = new File(targetDir, baseName + ".index");
+			if(!isRestart) {
+				try {
+					Files.walk(indexDir.toPath())
+					.sorted(Comparator.reverseOrder())
+					.map(Path::toFile)
+					.forEach(File::delete);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+
 			indexDir.mkdir();
+			config.setProperty("indexDir", indexDir.getPath());
+			commitConfig();
 
 			try {
 				//TODO: Buffer size is aligned to be SD card friendly, is 4MB okay?
 				final int bufferSize = (int) Math.pow(2, 22);
-				Downloader downloader = new Downloader(xmlDumpUrl, targetDumpFile, isRestart, bufferSize, blockFinder);
+				Downloader downloader = new Downloader(xmlDumpUrl, targetDumpFile, restartPos != null ? restartPos.readCountBits / 8 : null, bufferSize);
 				Map<String, List<String>> headers = downloader.doHead();
 				long targetFileSize = Downloader.getFileSizeFromHeaders(headers);
 
-				FileBasedBlockController el = new FileBasedBlockController(blockFile);
-				blockFinder.addEventListener(el);
+				FileBasedBlockController blockController = new FileBasedBlockController(blockFile);
+				BlockFinder blockFinder = new BlockFinder(restartPos != null ? restartPos : null);
+				blockFinder.addEventListener(blockController);
 
-				IndexerController ic = new IndexerController(targetDumpFile, new LuceneIndexerEventHandler(indexDir), el);
+				IndexerController indexController = new IndexerController(targetDumpFile, new LuceneIndexerEventHandler(indexDir), blockController);
 				DownloadEventListener del = new DownloadEventListener() {
 					@Override
 					public void onProgress(EventObject event, long currentFileSize) {
 						try {
-							el.flush();
+							blockController.flush();
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
@@ -142,15 +181,23 @@ public class OfflineWiki implements Runnable {
 					@Override
 					public void onDownloadFinished(EventObject event) {
 						try {
-							el.close();
+							blockController.close();
+							config.setProperty("blockSearchFinished", "true");
 						} catch (IOException e) {
 							e.printStackTrace();
+						} finally {
+							config.setProperty("downloadFinished", "true");
+							commitConfig();
 						}
 					}
+					@Override
+					public void onNewByte(EventObject event, int b) {}
 				};
+				downloader.addEventListener(blockFinder);
 				downloader.addEventListener(del);
+
 				threadPool.submit(downloader);
-				threadPool.submit(ic);
+				threadPool.submit(indexController);
 			} catch(IOException e) {
 				e.printStackTrace();
 			}
@@ -166,6 +213,20 @@ public class OfflineWiki implements Runnable {
 		} finally {
 			// shutdown pool
 			threadPool.shutdown();
+			threadPool.shutdownNow();
 		}
 	}
+
+	private synchronized void commitConfig() {
+		try(OutputStream outState = new FileOutputStream(configFile)) {
+			config.storeToXML(outState, null);
+		} catch (NullPointerException | IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public Properties getConfig() {
+		return config;
+	}
+
 }

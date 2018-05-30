@@ -16,25 +16,20 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import de.m3y3r.offlinewiki.Config;
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockFinder;
 
 public class Downloader implements Runnable {
 
 	private final URL url;
 	private final SplitFile dumpFile;
-	private final boolean isRestart;
+	private final Long restartPos;
 	private final List<DownloadEventListener> eventListeners;
 	private final int bufferSize;
 
-	// observer
-	private final BlockFinder blockFinder;
-
-	public Downloader(String xmlDumpUrl, SplitFile targetDumpFile, boolean isRestart, int bufferSize, BlockFinder blockFinder) throws MalformedURLException {
+	public Downloader(String xmlDumpUrl, SplitFile targetDumpFile, Long restartPos, int bufferSize) throws MalformedURLException {
 		this.url = new URL(xmlDumpUrl);
 		this.dumpFile = targetDumpFile;
-		this.isRestart = isRestart;
-		this.blockFinder = blockFinder;
 		this.bufferSize = bufferSize;
+		this.restartPos = restartPos;
 		this.eventListeners = new CopyOnWriteArrayList<>();
 	}
 
@@ -80,27 +75,12 @@ public class Downloader implements Runnable {
 		try(SplitFileOutputStream outputStream = new SplitFileOutputStream(dumpFile, Config.SPLIT_SIZE)) {
 			HttpURLConnection con = (HttpURLConnection) url.openConnection();
 			con.setRequestMethod("GET");
-			if(isRestart) { // restart existing download
-				long lenCommited = dumpFile.length();
-				con.addRequestProperty("Range", "bytes=" + lenCommited + "-");
-				outputStream.seek(lenCommited);
-
-				//feed the last 6 bytes into the block finder
-				if(blockFinder != null) {
-					try(SplitFileInputStream inRes = new SplitFileInputStream(dumpFile, Config.SPLIT_SIZE)) {
-						long lenRead = lenCommited - 6;
-						if(lenRead <= 0)
-							lenRead = 0;
-						inRes.seek(lenRead);
-						for(; lenRead == lenCommited; lenRead++) {
-							int b = inRes.read();
-							if(b >= 0)
-								blockFinder.update(b);
-							else
-								throw new IllegalStateException();
-						}
-					}
+			if(restartPos != null) { // restart existing download
+				if(restartPos >= dumpFile.length()) {
+					throw new IllegalStateException();
 				}
+				con.addRequestProperty("Range", "bytes=" + restartPos + "-");
+				outputStream.seek(restartPos);
 			}
 			con.connect();
 			try (InputStream in = con.getInputStream()) {
@@ -112,7 +92,7 @@ public class Downloader implements Runnable {
 		}
 	}
 
-	void download(InputStream in, OutputStream out) throws IOException {
+	private boolean download(InputStream in, OutputStream out) throws IOException {
 		long c = 0;
 
 		try (
@@ -123,10 +103,9 @@ public class Downloader implements Runnable {
 
 			while(b >= 0) {
 				if(Thread.interrupted())
-					return;
+					return false;
 
-				if(blockFinder != null)
-					blockFinder.update(b);
+				fireEventNewByte(b);
 				bout.write(b);
 				b = bin.read();
 
@@ -137,6 +116,13 @@ public class Downloader implements Runnable {
 					fireEventProgress(c);
 				}
 			}
+			return true;
+		}
+	}
+
+	private void fireEventNewByte(int b) {
+		for(DownloadEventListener e: eventListeners) {
+			e.onNewByte(null, b);
 		}
 	}
 
@@ -166,6 +152,6 @@ public class Downloader implements Runnable {
 		if(i < 0)
 			return null;
 
-		return xmlDumpUrl.substring(i, xmlDumpUrl.length());
+		return xmlDumpUrl.substring(i + 1, xmlDumpUrl.length());
 	}
 }

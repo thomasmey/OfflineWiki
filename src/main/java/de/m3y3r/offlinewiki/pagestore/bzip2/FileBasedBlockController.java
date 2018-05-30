@@ -10,46 +10,57 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.Flushable;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.EventObject;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
-public class FileBasedBlockController implements BlockFinderEventListener, Flushable, Closeable, Iterator<Long> {
+public class FileBasedBlockController implements BlockFinderEventListener, Flushable, Closeable, Iterator<FileBasedBlockController.BlockEntry> {
 
-	private final List entries;
+	/* blockfindereventlistener state */
+	private final List<BlockEntry> entries;
 	private final File blockFile;
+	/* blockfindereventlistener state */
 
-	private int iteratorIndex;
+	/* iterator state */
 	private DataInputStream in;
 	private boolean isFinished;
 	private volatile int availableBlocks;
 	private Object wait = new Object();
+	/* iterator state */
+
+	public static class BlockEntry {
+		public static final int BLOCK_ENTRY_LEN = 20;
+		public long blockNo;
+		public long readCountBits;
+		private IndexState indexState;
+	}
 
 	public static enum IndexState {INITIAL, STARTED, FINISHED};
 
-	public FileBasedBlockController(File target) throws FileNotFoundException {
+	public FileBasedBlockController(File target) {
 		this.blockFile = target;
 		this.entries = new ArrayList<>(32);
 	}
 
 	@Override
 	public void onNewBlock(EventObject event, long blockNo, long readCountBits) {
-		Object[] entry = new Object[] {blockNo, readCountBits};
+		BlockEntry entry = new BlockEntry();
+		entry.blockNo = blockNo;
+		entry.readCountBits = readCountBits;
+
 		entries.add(entry);
 	}
 
 	@Override
 	public void flush() throws IOException {
 		try(DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(blockFile, true)))) {
-			for(Object e : entries) {
-				Object[] entry = (Object[]) e;
-				long blockNo = (long)entry[0];
-				long readCountBits = (long)entry[1];
+			for(BlockEntry e : entries) {
 				int indexState = IndexState.INITIAL.ordinal();
-				out.writeLong(blockNo);
-				out.writeLong(readCountBits);
+				out.writeLong(e.blockNo);
+				out.writeLong(e.readCountBits);
 				out.writeInt(indexState);
 			}
 		}
@@ -66,7 +77,7 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 		isFinished = true;
 	}
 
-	public List getEntries() {
+	public List<BlockEntry> getEntries() {
 		return entries;
 	}
 
@@ -74,13 +85,11 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 	public boolean hasNext() {
 		if(!isFinished) {
 			synchronized (wait) {
-				int i = 0;
 				while(availableBlocks == 0) {
-					i++;
 					try {
 						wait.wait();
 					} catch (InterruptedException e) {
-						e.printStackTrace();
+						return false;
 					}
 				}
 			}
@@ -90,7 +99,7 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 	}
 
 	@Override
-	public Long next() {
+	public BlockEntry next() {
 		if(in == null) {
 			try {
 				in = new DataInputStream(new FileInputStream(blockFile));
@@ -101,10 +110,39 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 
 		availableBlocks--;
 		try {
-			long blockNo = in.readLong();
-			long readCountBits = in.readLong();
-			int indexState = in.readInt();
-			return readCountBits;
+			BlockEntry entry = readBlockEntry(in);
+			return entry;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	private static BlockEntry readBlockEntry(DataInputStream in) throws IOException {
+		long blockNo = in.readLong();
+		long readCountBits = in.readLong();
+		int indexState = in.readInt();
+		BlockEntry entry = new BlockEntry();
+		entry.blockNo = blockNo;
+		entry.readCountBits = readCountBits;
+		entry.indexState = IndexState.values()[indexState];
+		return entry;
+	}
+
+	public static BlockEntry getLastEntry(File blockFile) {
+		if(blockFile == null || !blockFile.exists() || !blockFile.isFile() || blockFile.length() < BlockEntry.BLOCK_ENTRY_LEN) return null;
+
+		long lastCompleteEntry = (blockFile.length() / BlockEntry.BLOCK_ENTRY_LEN * BlockEntry.BLOCK_ENTRY_LEN); // 8 + 8 + 4
+
+		try {
+			FileChannel fc = FileChannel.open(blockFile.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE);
+			fc.truncate(lastCompleteEntry);
+			try(FileInputStream fis = new FileInputStream(blockFile)) {
+				fis.getChannel().position(lastCompleteEntry - BlockEntry.BLOCK_ENTRY_LEN);
+				try(DataInputStream in = new DataInputStream(fis)) {
+					return readBlockEntry(in);
+				}
+			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

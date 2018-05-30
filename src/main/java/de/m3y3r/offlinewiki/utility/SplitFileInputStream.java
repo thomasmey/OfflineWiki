@@ -25,8 +25,10 @@ public class SplitFileInputStream extends InputStream {
 			File file = new File(splitFile.getParentFile(), splitFile.getBaseName() + '.' + splitNo);
 			if(!file.exists() || file.isDirectory())
 				return null;
-			if(splitCount < maxSplitCount && file.length() != splitSize)
-				return null;
+
+			//TODO/FIXME: download can be in progress, don't enforce file size check
+//			if(splitCount < maxSplitCount && file.length() != splitSize)
+//				return null;
 
 			splitCount = splitNo;
 
