@@ -6,7 +6,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.Flushable;
 import java.io.IOException;
@@ -22,6 +21,7 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 	/* blockfindereventlistener state */
 	private final List<BlockEntry> entries;
 	private final File blockFile;
+	private final BlockEntry restart;
 	/* blockfindereventlistener state */
 
 	/* iterator state */
@@ -40,9 +40,10 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 
 	public static enum IndexState {INITIAL, STARTED, FINISHED};
 
-	public FileBasedBlockController(File target) {
+	public FileBasedBlockController(File target, BlockEntry restart) {
 		this.blockFile = target;
 		this.entries = new ArrayList<>(32);
+		this.restart = restart;
 	}
 
 	@Override
@@ -56,6 +57,7 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 
 	@Override
 	public void flush() throws IOException {
+		//TODO/FIXME: file is truncated in restart of BlockFinder, this should be okay
 		try(DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(blockFile, true)))) {
 			for(BlockEntry e : entries) {
 				int indexState = IndexState.INITIAL.ordinal();
@@ -102,8 +104,12 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 	public BlockEntry next() {
 		if(in == null) {
 			try {
-				in = new DataInputStream(new FileInputStream(blockFile));
-			} catch (FileNotFoundException e) {
+				FileInputStream fis = new FileInputStream(blockFile);
+				if(restart != null) {
+					fis.getChannel().position(restart.blockNo * BlockEntry.BLOCK_ENTRY_LEN);
+				}
+				in = new DataInputStream(fis);
+			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}

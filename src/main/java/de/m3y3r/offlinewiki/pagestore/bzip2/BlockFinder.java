@@ -31,7 +31,7 @@ public class BlockFinder implements DownloadEventListener {
 		File inputFile = new File(args[0]);
 		BlockFinder blockFinder = new BlockFinder(null);
 		File blockFile = new File(inputFile.getParent(), inputFile.getName() + ".blocks");
-		BlockFinderEventListener el = new FileBasedBlockController(blockFile);
+		BlockFinderEventListener el = new FileBasedBlockController(blockFile, null);
 		blockFinder.addEventListener(el);
 		blockFinder.findBlocks(inputFile.toPath());
 	}

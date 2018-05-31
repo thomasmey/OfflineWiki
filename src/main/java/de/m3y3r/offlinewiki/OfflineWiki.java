@@ -162,7 +162,7 @@ public class OfflineWiki implements Runnable {
 				Map<String, List<String>> headers = downloader.doHead();
 				long targetFileSize = Downloader.getFileSizeFromHeaders(headers);
 
-				FileBasedBlockController blockController = new FileBasedBlockController(blockFile);
+				FileBasedBlockController blockController = new FileBasedBlockController(blockFile, restartPos != null ? restartPos : null);
 				BlockFinder blockFinder = new BlockFinder(restartPos != null ? restartPos : null);
 				blockFinder.addEventListener(blockController);
 
