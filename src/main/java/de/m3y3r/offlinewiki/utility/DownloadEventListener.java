@@ -4,11 +4,10 @@ import java.util.EventObject;
 
 public interface DownloadEventListener {
 
-	void onProgress(EventObject event, long currentFileSize);
-
+	void onDownloadStart(EventObject event);
 	void onDownloadFinished(EventObject event);
 
-	void onDownloadStart(EventObject event);
+	void onProgress(EventObject event, long currentFileSize);
 
 	void onNewByte(EventObject event, int b);
 

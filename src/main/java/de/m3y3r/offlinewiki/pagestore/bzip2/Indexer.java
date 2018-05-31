@@ -185,6 +185,7 @@ public class Indexer implements Runnable {
 			normalEnd = true;
 
 		} catch (Exception e) {
+			logger.log(Level.SEVERE, "Exception for block config: {0}", inputStream.toString());
 			logger.log(Level.SEVERE, "failed!", e);
 		} finally {
 			// finished execution, give listener the change to clean-up

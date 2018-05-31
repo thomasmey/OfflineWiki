@@ -2,6 +2,7 @@ package de.m3y3r.offlinewiki.pagestore.bzip2;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.EventObject;
 import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -52,15 +53,15 @@ public class IndexerController implements Runnable, Closeable {
 							Thread.currentThread().interrupt();
 					}
 					@Override
-					public void onPageStart(IndexerEvent event) {
-					}
+					public void onPageStart(IndexerEvent event) {}
 					@Override
 					public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {
-//						System.out.println("title=" + title);
+						System.out.println("title=" + title);
 					}
 					@Override
-					public void onEndOfStream(IndexerEvent event, boolean filePos) {
-					}
+					public void onEndOfStream(IndexerEvent event, boolean filePos) {}
+					@Override
+					public void onIndexingFinished(IndexerEvent event) {}
 				};
 				indexerJob.addEventListener(stopper);
 
@@ -74,7 +75,7 @@ public class IndexerController implements Runnable, Closeable {
 						try {
 							Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 						} catch (InterruptedException e1) {
-							e1.printStackTrace();
+							return;
 						}
 					}
 				}
@@ -83,6 +84,12 @@ public class IndexerController implements Runnable, Closeable {
 			}
 			fromBits = toBits;
 		}
+		fireEventIndexingFinished();
+	}
+
+	private void fireEventIndexingFinished() {
+		IndexerEvent event = new IndexerEvent(this);
+		indexerEventListener.onIndexingFinished(event);
 	}
 
 	public void buildRestartStream() {

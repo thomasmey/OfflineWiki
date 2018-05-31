@@ -1,7 +1,10 @@
 package de.m3y3r.offlinewiki.pagestore.bzip2;
 
 import java.io.File;
+import java.io.Flushable;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -26,63 +29,44 @@ import de.m3y3r.offlinewiki.Config;
  * @author thomas
  *
  */
-public class LuceneIndexerEventHandler implements IndexerEventListener {
+public class LuceneIndexerEventHandler implements IndexerEventListener, Flushable {
 
-	private IndexWriter index;
-	private int maxTitleLen;
-	private int titleCount;
+	private final IndexWriter index;
 	private final Logger logger;
+	private final List<Document> documents;
 
 	public LuceneIndexerEventHandler(File indexDir) throws IOException {
 		this.logger = Logger.getLogger(Config.LOGGER_NAME);
+
 		Analyzer analyzer = new StandardAnalyzer();
 		IndexWriterConfig iwc = new IndexWriterConfig(analyzer);
 		Directory directory = FSDirectory.open(indexDir.toPath());
-		this.index = new IndexWriter(directory, iwc);
+		IndexWriter indexWriter = new IndexWriter(directory, iwc);
+		this.index = indexWriter;
+		this.documents = new ArrayList<>();
 	}
 
 	@Override
-	public void onPageStart(IndexerEvent event) {
-	}
+	public void onPageStart(IndexerEvent event) {}
 
 	@Override
-	public void onEndOfStream(IndexerEvent event, boolean normalEnd) {
-		try {
-			index.commit();
-//			index.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
+	public void onPageTagEnd(IndexerEvent event, long currentTagEndPos) {}
+
+	@Override
+	public void onEndOfStream(IndexerEvent event, boolean normalEnd) {}
 
 	@Override
 	public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {
 		try {
 			addToIndex((Indexer) event.getSource(), index, title, pageTagStartPos);
-//			if(titleCount % 1000 == 0) {
-//				logger.log(Level.FINE,"Processed {0} pages", titleCount);
-//				index.commit();
-//			}
 		} catch(IOException e) {
 			logger.log(Level.SEVERE, "Adding title to index failed!", e);
 		}
 	}
 
-	@Override
-	public void onPageTagEnd(IndexerEvent event, long currentTagEndPos) {
-	}
-
 	private void addToIndex(Indexer indexer, IndexWriter index, String pageTitel, long currentTagUncompressedPosition) throws IOException {
 
 		String title = pageTitel;
-		synchronized (this) {
-			titleCount++;
-			if(title.length() > maxTitleLen) {
-				maxTitleLen = title.length();
-				logger.log(Level.INFO, "Longest title \"{0}\" with size {1}", new Object[] {title, maxTitleLen});
-			}
-		}
-
 		long blockPositionInBits = indexer.getBlockStartPosition();
 
 		Document d = new Document();
@@ -91,12 +75,31 @@ public class LuceneIndexerEventHandler implements IndexerEventListener {
 
 		d.add(new LongPoint("pageUncompressedPosition", currentTagUncompressedPosition));
 		d.add(new StoredField("pageUncompressedPosition", currentTagUncompressedPosition));
-//		d.add(new LongPoint("blockUncompressedPosition", blockUncompressedPosition));
-//		d.add(new StoredField("blockUncompressedPosition", blockUncompressedPosition));
 		d.add(new LongPoint("blockPositionInBits", blockPositionInBits));
 		d.add(new StoredField("blockPositionInBits", blockPositionInBits));
 
-		index.addDocument(d);
+		synchronized (this) {
+			documents.add(d);
+		}
+	}
+
+	@Override
+	public void onIndexingFinished(IndexerEvent event) {
+		try {
+			flush();
+			index.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public void flush() throws IOException {
+		synchronized (this) {
+			index.addDocuments(documents);
+		}
+		index.commit();
+		documents.clear();
 	}
 }
 

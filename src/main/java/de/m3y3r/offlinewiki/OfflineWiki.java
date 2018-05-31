@@ -166,12 +166,15 @@ public class OfflineWiki implements Runnable {
 				BlockFinder blockFinder = new BlockFinder(restartPos != null ? restartPos : null);
 				blockFinder.addEventListener(blockController);
 
-				IndexerController indexController = new IndexerController(targetDumpFile, new LuceneIndexerEventHandler(indexDir), blockController);
+				// This event handler is called concurrently, be careful with synchronization
+				LuceneIndexerEventHandler indexEventHandler = new LuceneIndexerEventHandler(indexDir);
+				IndexerController indexController = new IndexerController(targetDumpFile, indexEventHandler, blockController);
 				DownloadEventListener del = new DownloadEventListener() {
 					@Override
 					public void onProgress(EventObject event, long currentFileSize) {
 						try {
 							blockController.flush();
+							indexEventHandler.flush();
 						} catch (IOException e) {
 							e.printStackTrace();
 						}

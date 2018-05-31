@@ -8,6 +8,13 @@ import de.m3y3r.offlinewiki.Config;
 
 public class Bzip2BlockInputStream extends InputStream {
 
+	@Override
+	public String toString() {
+		return "Bzip2BlockInputStream [fromBits=" + fromBits + ", toBits=" + toBits + ", readCountBytes="
+				+ readCountBytes + ", wasSeeked=" + wasSeeked + ", isBlockOverrun=" + isBlockOverrun + ", bitShift="
+				+ bitShift + ", currentByte=" + currentByte + "]";
+	}
+
 	private final SplitFileInputStream in;
 	private final long fromBits;
 	private final long toBits;

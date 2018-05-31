@@ -73,7 +73,7 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 
 	@Override
 	public void close() throws IOException {
-		entries.clear();
+		flush();
 		isFinished = true;
 	}
 
@@ -83,18 +83,18 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 
 	@Override
 	public boolean hasNext() {
-		if(!isFinished) {
-			synchronized (wait) {
-				while(availableBlocks == 0) {
-					try {
-						wait.wait();
-					} catch (InterruptedException e) {
-						return false;
-					}
+		synchronized (wait) {
+			while(availableBlocks == 0) {
+				if(isFinished)
+					break;
+
+				try {
+					wait.wait();
+				} catch (InterruptedException e) {
+					break;
 				}
 			}
 		}
-
 		return availableBlocks > 0;
 	}
 

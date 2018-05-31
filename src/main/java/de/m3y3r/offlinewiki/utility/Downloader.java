@@ -67,11 +67,6 @@ public class Downloader implements Runnable {
 	public void run() {
 		fireEventDownloadStart();
 
-//		if(dumpFile.length() == totalFileSize) {
-//			fireEventDownloadFinished();
-//			return;
-//		}
-
 		try(SplitFileOutputStream outputStream = new SplitFileOutputStream(dumpFile, Config.SPLIT_SIZE)) {
 			HttpURLConnection con = (HttpURLConnection) url.openConnection();
 			con.setRequestMethod("GET");
@@ -83,10 +78,12 @@ public class Downloader implements Runnable {
 				outputStream.seek(restartPos);
 			}
 			con.connect();
+			boolean normalEnd;
 			try (InputStream in = con.getInputStream()) {
-				download(in, outputStream);
+				normalEnd = download(in, outputStream);
 			}
-			fireEventDownloadFinished();
+			if(normalEnd)
+				fireEventDownloadFinished();
 		} catch (IOException e) {
 			Logger.getLogger(Config.LOGGER_NAME).log(Level.SEVERE, "GET failed!", e);
 		}
