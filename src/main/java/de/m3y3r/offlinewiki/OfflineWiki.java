@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.EventObject;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -136,6 +137,7 @@ public class OfflineWiki implements Runnable {
 			if(!isRestart)
 				blockFile.delete();
 			else {
+				// restart from the last block the previous run did find
 				restartPos = FileBasedBlockController.getLastEntry(blockFile);
 			}
 
@@ -162,13 +164,14 @@ public class OfflineWiki implements Runnable {
 				Map<String, List<String>> headers = downloader.doHead();
 				long targetFileSize = Downloader.getFileSizeFromHeaders(headers);
 
-				FileBasedBlockController blockController = new FileBasedBlockController(blockFile, restartPos != null ? restartPos : null);
+				FileBasedBlockController blockController = new FileBasedBlockController(blockFile);
+				Iterator<BlockEntry> blockProvider = new FileBasedBlockController.FileBasedBlockIterator(blockFile);
 				BlockFinder blockFinder = new BlockFinder(restartPos != null ? restartPos : null);
 				blockFinder.addEventListener(blockController);
 
 				// This event handler is called concurrently, be careful with synchronization
 				LuceneIndexerEventHandler indexEventHandler = new LuceneIndexerEventHandler(indexDir);
-				IndexerController indexController = new IndexerController(targetDumpFile, indexEventHandler, blockController);
+				IndexerController indexController = new IndexerController(targetDumpFile, indexEventHandler, blockProvider);
 				DownloadEventListener del = new DownloadEventListener() {
 					@Override
 					public void onProgress(EventObject event, long currentFileSize) {

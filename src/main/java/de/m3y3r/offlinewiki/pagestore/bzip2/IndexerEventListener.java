@@ -8,6 +8,4 @@ public interface IndexerEventListener {
 	public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos);
 
 	public void onEndOfStream(IndexerEvent event, boolean filePos);
-
-	public void onIndexingFinished(IndexerEvent event);
 }

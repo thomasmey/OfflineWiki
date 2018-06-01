@@ -2,7 +2,6 @@ package de.m3y3r.offlinewiki.pagestore.bzip2;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.EventObject;
 import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -11,6 +10,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.BlockEntry;
+import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.FileBasedBlockIterator;
+import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.IndexState;
 import de.m3y3r.offlinewiki.utility.Bzip2BlockInputStream;
 import de.m3y3r.offlinewiki.utility.SplitFile;
 
@@ -24,7 +25,7 @@ public class IndexerController implements Runnable, Closeable {
 	public IndexerController(SplitFile xmDumpFile, IndexerEventListener indexEventListener, Iterator<BlockEntry> blockProvider) {
 		this.xmlDumpFile = xmDumpFile;
 		this.indexerEventListener = indexEventListener;
-//		this.threadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+		//		this.threadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 		this.threadPool = new ThreadPoolExecutor(0, Runtime.getRuntime().availableProcessors(),
 				0L, TimeUnit.MILLISECONDS,
 				new LinkedBlockingQueue<Runnable>(2));
@@ -35,61 +36,73 @@ public class IndexerController implements Runnable, Closeable {
 	public void run() {
 		BlockEntry fromBits = null;
 
-		if(blockProvider.hasNext())
-			fromBits = blockProvider.next();
+		boolean blockFinderFinished = false;
+		outer:
+		while(!blockFinderFinished) {
 
-		while(blockProvider.hasNext()) {
-			if(Thread.interrupted())
+			// wait a bit
+			try {
+				Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			} catch (InterruptedException e) {
 				return;
+			}
 
-			BlockEntry toBits = blockProvider.next();
-			try (Bzip2BlockInputStream stream = new Bzip2BlockInputStream(xmlDumpFile, fromBits.readCountBits, toBits.readCountBits + 48)) {
-				Indexer indexerJob = new Indexer(stream, fromBits.readCountBits);
-				indexerJob.addEventListener(indexerEventListener);
-				IndexerEventListener stopper = new IndexerEventListener() {
-					@Override
-					public void onPageTagEnd(IndexerEvent event, long currentTagEndPos) {
-						if(stream.isOverrun())
-							Thread.currentThread().interrupt();
-					}
-					@Override
-					public void onPageStart(IndexerEvent event) {}
-					@Override
-					public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {
-						System.out.println("title=" + title);
-					}
-					@Override
-					public void onEndOfStream(IndexerEvent event, boolean filePos) {}
-					@Override
-					public void onIndexingFinished(IndexerEvent event) {}
-				};
-				indexerJob.addEventListener(stopper);
+			// search first INITAL block, i.e. a block that need indexing
+			if(fromBits == null && blockProvider.hasNext()) {
+				fromBits = blockProvider.next();
+				if(fromBits.indexState != IndexState.INITIAL)
+					continue outer;
+			}
 
-				int retryCount = 0;
-				while(true) {
-					try {
-						threadPool.submit(indexerJob);
-						break;
-					} catch(RejectedExecutionException e) {
-						retryCount++;
+			while(blockProvider.hasNext()) {
+				if(Thread.interrupted())
+					return;
+
+				BlockEntry toBits = blockProvider.next();
+				try (Bzip2BlockInputStream stream = new Bzip2BlockInputStream(xmlDumpFile, fromBits.readCountBits, toBits.readCountBits + 48)) {
+					final BlockEntry be = fromBits;
+					Indexer indexerJob = new Indexer(stream, be.readCountBits);
+					indexerJob.addEventListener(indexerEventListener);
+					IndexerEventListener stopper = new IndexerEventListener() {
+						@Override
+						public void onPageTagEnd(IndexerEvent event, long currentTagEndPos) {
+							if(stream.isOverrun())
+								stream.endStream();
+						}
+						@Override
+						public void onPageStart(IndexerEvent event) {}
+						@Override
+						public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {
+							System.out.println("title=" + title);
+						}
+						@Override
+						public void onEndOfStream(IndexerEvent event, boolean filePos) {
+							System.out.println("commit index state");
+							((FileBasedBlockIterator) blockProvider).setBlockFinished(be.blockNo);
+						}
+					};
+					indexerJob.addEventListener(stopper);
+
+					int retryCount = 0;
+					while(true) {
 						try {
-							Thread.sleep(TimeUnit.SECONDS.toMillis(5));
-						} catch (InterruptedException e1) {
-							return;
+							threadPool.submit(indexerJob);
+							break;
+						} catch(RejectedExecutionException e) {
+							retryCount++;
+							try {
+								Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+							} catch (InterruptedException e1) {
+								return;
+							}
 						}
 					}
+				} catch (IOException e) {
+					e.printStackTrace();
 				}
-			} catch (IOException e) {
-				e.printStackTrace();
+				fromBits = toBits;
 			}
-			fromBits = toBits;
 		}
-		fireEventIndexingFinished();
-	}
-
-	private void fireEventIndexingFinished() {
-		IndexerEvent event = new IndexerEvent(this);
-		indexerEventListener.onIndexingFinished(event);
 	}
 
 	public void buildRestartStream() {

@@ -1,5 +1,6 @@
 package de.m3y3r.offlinewiki.pagestore.bzip2;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.Flushable;
 import java.io.IOException;
@@ -29,7 +30,7 @@ import de.m3y3r.offlinewiki.Config;
  * @author thomas
  *
  */
-public class LuceneIndexerEventHandler implements IndexerEventListener, Flushable {
+public class LuceneIndexerEventHandler implements IndexerEventListener, Flushable, Closeable {
 
 	private final IndexWriter index;
 	private final Logger logger;
@@ -84,13 +85,9 @@ public class LuceneIndexerEventHandler implements IndexerEventListener, Flushabl
 	}
 
 	@Override
-	public void onIndexingFinished(IndexerEvent event) {
-		try {
-			flush();
-			index.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+	public void close() throws IOException {
+		flush();
+		index.close();
 	}
 
 	@Override
