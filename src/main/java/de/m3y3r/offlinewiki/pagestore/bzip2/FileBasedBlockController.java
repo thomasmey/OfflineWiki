@@ -17,8 +17,6 @@ import java.util.EventObject;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.commons.compress.compressors.lz77support.LZ77Compressor.Block;
-
 public class FileBasedBlockController implements BlockFinderEventListener, Flushable, Closeable {
 
 	public static class FileBasedBlockIterator implements Iterator<FileBasedBlockController.BlockEntry> {
@@ -67,9 +65,14 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 
 		public static final int BLOCK_ENTRY_LEN = 20; // 8 + 8 + 4
 
-		public long blockNo;
-		public long readCountBits;
+		public final long blockNo;
+		public final long readCountBits;
 		public IndexState indexState;
+
+		public BlockEntry(long blockNo, long readCountBits) {
+			this.blockNo = blockNo;
+			this.readCountBits = readCountBits;
+		}
 
 		public static void writeObject(DataOutputStream out, BlockEntry be) 
 				throws IOException {
@@ -83,9 +86,7 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 			long readCountBits = in.readLong();
 			int indexState = in.readInt();
 
-			BlockEntry be = new BlockEntry();
-			be.blockNo = blockNo;
-			be.readCountBits = readCountBits;
+			BlockEntry be = new BlockEntry(blockNo, readCountBits);
 			be.indexState = IndexState.values()[indexState];
 			return be;
 		}
@@ -104,10 +105,7 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 
 	@Override
 	public void onNewBlock(EventObject event, long blockNo, long readCountBits) {
-		BlockEntry entry = new BlockEntry();
-		entry.blockNo = blockNo;
-		entry.readCountBits = readCountBits;
-
+		BlockEntry entry = new BlockEntry(blockNo, readCountBits);
 		entries.add(entry);
 	}
 

@@ -129,7 +129,7 @@ public class BZip2Store implements Store<WikiPage, String> {
 
 		SplitFile baseFile = OfflineWiki.getInstance().getXmlDumpFile();
 		try (
-				Bzip2BlockInputStream bbin = new Bzip2BlockInputStream(baseFile, blockPositionInBits, Long.MAX_VALUE);
+				Bzip2BlockInputStream bbin = new Bzip2BlockInputStream(baseFile, blockPositionInBits);
 				BufferInputStream in = new BufferInputStream(bbin);
 				BZip2CompressorInputStream bZip2In = new BZip2CompressorInputStream(in, false);) {
 			// skip to next page; set uncompressed byte position

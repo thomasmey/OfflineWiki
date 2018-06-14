@@ -85,8 +85,8 @@ public class OfflineWiki implements Runnable {
 
 		interactionDriverLatch = new CountDownLatch(1);
 
-		//		interactionDriver = new ConsoleDriver();
-		//		interactionDriver = new StdInOutDriver();
+//		interactionDriver = new ConsoleDriver();
+//		interactionDriver = new StdInOutDriver();
 		interactionDriver = new SwingDriver(interactionDriverLatch);
 	}
 
