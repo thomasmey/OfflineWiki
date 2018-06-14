@@ -59,14 +59,13 @@ public class Bzip2BlockInputStream extends InputStream {
 				case SEEK_BLOCK:
 				{
 					in.seek(fromBits / 8);
-					readCountBits = fromBits / 8 * 8;
 					state = nextState;
 				}
 				break;
 
 				case SEARCH_BLOCK:
 				{
-					BlockEntry restart = new BlockEntry(0, fromBits);
+					BlockEntry restart = new BlockEntry(0, fromBits / 8 * 8);
 					BlockFinder bf = new BlockFinder(restart);
 					class NextBLockFinder implements BlockFinderEventListener {
 						Long readCountBits;
@@ -107,26 +106,45 @@ public class Bzip2BlockInputStream extends InputStream {
 				case COPY_BLOCK:
 				{
 					bitShift = (byte) (fromBits % 8);
+					readCountBits = fromBits;
 					currentByte = in.read();
 					if(currentByte < 0)
 						return null;
 
-					int b;
-					while((b = readShifted(in)) >= 0) {
+					while(true) {
+						int b = readShifted(in);
+						if(b < 0)
+							break;
+
 						readCountBits += 8;
 						if(readCountBits >= toBits) {
 							state = State.APPEND_END_OF_STREAM_BLOCK;
 							int bitsTooMuch = (int) (readCountBits - toBits);
+
+							// bitshift = 3
+							//           1824653 
+							//                 |
+							//                 |
+							// 0xff      0x59      0x8a
+							// 1111 1111 0101 1001 1000 1010
+							//                 001 1000 1 = 0x31
+							bitShift = (byte) bitsTooMuch;
+
 							if(bitsTooMuch > 0) {
-								// bitshift = 3
-								// 3456
-								// 0xff      0x59      0x8a
-								// 1111 1111 0101 1001 1000 1010
-								//                 001 1000 1 = 0x31
-								bitShift = (byte) bitsTooMuch;
-								currentByte = b >>> bitShift;
+								int prevByte = b;
+//								int prevByte = bb.get(bb.position() - 1);
+//								bb.position(bb.position() - 1);
+								{
+									int v031 = (prevByte << (8 - bitsTooMuch)) & 0xff;
+									int sb031 = (0x31 >>> (8 - bitsTooMuch)) << (8 - bitsTooMuch) & 0xff;
+									if(v031 != sb031) {
+										System.out.println("help; is="+ v031 + "should be=" + sb031 + "shfit=" + bitsTooMuch + "readCountBits="+readCountBits);
+									}
+								}
+								currentByte = (prevByte >>> bitShift) & 0xff;
 								break;
 							}
+							// bitshift is zero, write current byte to buffer and end
 							bb.put((byte) b);
 							break;
 						}
@@ -138,9 +156,9 @@ public class Bzip2BlockInputStream extends InputStream {
 				case APPEND_END_OF_STREAM_BLOCK:
 				{
 					for(byte b: piSqrt)
-						bb.put((byte) shiftByte(b));
+						bb.put((byte) shiftByte(b & 0xff));
 					for(byte b: toByteArray(crcStream))
-						bb.put((byte) shiftByte(b));
+						bb.put((byte) shiftByte(b & 0xff));
 					bb.put((byte) shiftByte(-1));
 					state = State.FIN;
 				}
@@ -169,7 +187,7 @@ public class Bzip2BlockInputStream extends InputStream {
 	private int shiftByte(int nextByte) {
 		try {
 			if(bitShift == 0) {
-				return nextByte;
+				return currentByte;
 			}
 
 			if(nextByte < 0) { // we did hit end of stream, process buffered bits
