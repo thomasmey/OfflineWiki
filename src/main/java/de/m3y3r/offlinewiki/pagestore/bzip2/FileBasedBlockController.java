@@ -98,8 +98,8 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 
 	public static enum IndexState {INITIAL, STARTED, FINISHED};
 
-	public FileBasedBlockController(File target) {
-		this.blockFile = target;
+	public FileBasedBlockController(File blockFile) {
+		this.blockFile = blockFile;
 		this.entries = new ArrayList<>(32);
 	}
 
@@ -144,5 +144,14 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 			e.printStackTrace();
 		}
 		return null;
+	}
+
+	@Override
+	public void onEndOfFile(EventObject event) {
+		try {
+			close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 }

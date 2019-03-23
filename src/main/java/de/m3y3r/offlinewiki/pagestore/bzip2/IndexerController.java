@@ -25,8 +25,10 @@ public class IndexerController implements Runnable, Closeable {
 	public IndexerController(SplitFile xmDumpFile, IndexerEventListener indexEventListener, Iterator<BlockEntry> blockProvider) {
 		this.xmlDumpFile = xmDumpFile;
 		this.indexerEventListener = indexEventListener;
+//		int noThreads = Runtime.getRuntime().availableProcessors();
+		int noThreads = 1;
 //		this.threadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-		this.threadPool = new ThreadPoolExecutor(0, Runtime.getRuntime().availableProcessors(),
+		this.threadPool = new ThreadPoolExecutor(0, noThreads,
 				0L, TimeUnit.MILLISECONDS,
 				new LinkedBlockingQueue<Runnable>(2));
 		this.blockProvider = blockProvider;

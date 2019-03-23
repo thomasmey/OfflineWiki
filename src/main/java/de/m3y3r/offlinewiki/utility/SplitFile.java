@@ -11,18 +11,17 @@ import de.m3y3r.offlinewiki.Config;
 
 public class SplitFile /*extends File*/ {
 
+	private static final Logger log = Logger.getLogger(Config.LOGGER_NAME);
+
 	private final File baseDir;
 	private final String baseName;
-	private final Logger log;
 
 	public SplitFile(File targetDir, String baseName) {
 		if(!targetDir.exists() || !targetDir.isDirectory()) {
 			throw new IllegalArgumentException();
 		}
-
 		this.baseName = baseName;
 		this.baseDir = targetDir;
-		this.log = Logger.getLogger(Config.LOGGER_NAME);
 	}
 
 	public long length() {

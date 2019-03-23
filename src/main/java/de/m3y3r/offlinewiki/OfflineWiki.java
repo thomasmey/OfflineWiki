@@ -30,6 +30,7 @@ import de.m3y3r.offlinewiki.frontend.swing.SwingDriver;
 import de.m3y3r.offlinewiki.pagestore.Store;
 import de.m3y3r.offlinewiki.pagestore.bzip2.BZip2Store;
 import de.m3y3r.offlinewiki.pagestore.bzip2.BlockFinder;
+import de.m3y3r.offlinewiki.pagestore.bzip2.BlockFinderEventListener;
 import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController;
 import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.BlockEntry;
 import de.m3y3r.offlinewiki.pagestore.bzip2.IndexerController;
@@ -120,29 +121,33 @@ public class OfflineWiki implements Runnable {
 			String xmlDumpUrl = config.getProperty("xmlDumpUrl", config.getProperty("defaultXmlDumpUrl"));
 			config.setProperty("xmlDumpUrl", xmlDumpUrl);
 			config.setProperty("firstStart", "false");
+			config.setProperty("downloadFinished", "false");
+			config.setProperty("blockSearchFinished", "false");
+			config.setProperty("indexingFinished", "false");
 			commitConfig();
 		}
 
+		String xmlDumpUrl = config.getProperty("xmlDumpUrl");
+		String baseName = Downloader.getBaseNameFromUrl(xmlDumpUrl);
+
+		File targetDir = new File(".");
+		SplitFile targetDumpFile = new SplitFile(targetDir, baseName);
+		File blockFile = new File(targetDir, baseName + ".blocks");
+		File indexDir = new File(targetDir, baseName + ".index");
+
+		//FIXME: isRestart must not be true when etag of wiki dump file did change
+		boolean isRestart = true;
+		// restart from the last block the previous run did find, or null if no block file exists yet
+		BlockEntry restartPos = FileBasedBlockController.getLastEntry(blockFile);
+
 		if(!Boolean.parseBoolean(config.getProperty("downloadFinished"))) {
-			String xmlDumpUrl = config.getProperty("xmlDumpUrl");
-			File targetDir = new File(".");
-			String baseName = Downloader.getBaseNameFromUrl(xmlDumpUrl);
-			SplitFile targetDumpFile = new SplitFile(targetDir, baseName);
-
-			//FIXME: isRestart must not be true when etag of wiki dump file did change
-			boolean isRestart = true;
-
-			BlockEntry restartPos = null;
-			File blockFile = new File(targetDir, baseName + ".blocks");
-			if(!isRestart)
+			if(!isRestart) {
 				blockFile.delete();
-			else {
-				// restart from the last block the previous run did find
-				restartPos = FileBasedBlockController.getLastEntry(blockFile);
+				restartPos = null;
 			}
 
-			File indexDir = new File(targetDir, baseName + ".index");
-			if(!isRestart) {
+			indexDir.mkdir();
+			if(!isRestart) { // no restart, delete all possible existing files
 				try {
 					Files.walk(indexDir.toPath())
 					.sorted(Comparator.reverseOrder())
@@ -152,8 +157,6 @@ public class OfflineWiki implements Runnable {
 					e.printStackTrace();
 				}
 			}
-
-			indexDir.mkdir();
 			config.setProperty("indexDir", indexDir.getPath());
 			commitConfig();
 
@@ -164,47 +167,62 @@ public class OfflineWiki implements Runnable {
 				Map<String, List<String>> headers = downloader.doHead();
 				long targetFileSize = Downloader.getFileSizeFromHeaders(headers);
 
-				FileBasedBlockController blockController = new FileBasedBlockController(blockFile);
-				Iterator<BlockEntry> blockProvider = new FileBasedBlockController.FileBasedBlockIterator(blockFile);
-				BlockFinder blockFinder = new BlockFinder(restartPos != null ? restartPos : null);
-				blockFinder.addEventListener(blockController);
-
-				// This event handler is called concurrently, be careful with synchronization
-				LuceneIndexerEventHandler indexEventHandler = new LuceneIndexerEventHandler(indexDir);
-				IndexerController indexController = new IndexerController(targetDumpFile, indexEventHandler, blockProvider);
 				DownloadEventListener del = new DownloadEventListener() {
 					@Override
-					public void onProgress(EventObject event, long currentFileSize) {
-						try {
-							blockController.flush();
-							indexEventHandler.flush();
-						} catch (IOException e) {
-							e.printStackTrace();
-						}
-					}
+					public void onProgress(EventObject event, long currentFileSize) {}
 					@Override
 					public void onDownloadStart(EventObject event) {}
 					@Override
 					public void onDownloadFinished(EventObject event) {
-						try {
-							blockController.close();
-							config.setProperty("blockSearchFinished", "true");
-						} catch (IOException e) {
-							e.printStackTrace();
-						} finally {
-							config.setProperty("downloadFinished", "true");
-							commitConfig();
-						}
+						config.setProperty("downloadFinished", "true");
+						commitConfig();
 					}
 					@Override
 					public void onNewByte(EventObject event, int b) {}
 				};
-				downloader.addEventListener(blockFinder);
 				downloader.addEventListener(del);
-
 				threadPool.submit(downloader);
-				threadPool.submit(indexController);
 			} catch(IOException e) {
+				e.printStackTrace();
+			}
+		}
+
+		if(!Boolean.parseBoolean(config.getProperty("blockSearchFinished"))) {
+			BlockFinder blockFinder = new BlockFinder(restartPos, targetDumpFile);
+			FileBasedBlockController blockController = new FileBasedBlockController(blockFile);
+			blockFinder.addEventListener(blockController);
+
+			//TODO: Finish this one:
+			BlockFinderEventListener restartIfDownloadNotFinished = new BlockFinderEventListener() {
+				@Override
+				public void onNewBlock(EventObject event, long blockNo, long readCountBits) {
+//					try {
+//						blockController.flush();
+//					} catch (IOException e) {
+//						e.printStackTrace();
+//					}
+				}
+				@Override
+				public void onEndOfFile(EventObject event) {
+					config.setProperty("blockSearchFinished", "true");
+				}
+			};
+			blockFinder.addEventListener(restartIfDownloadNotFinished);
+			threadPool.submit(blockFinder);
+		}
+
+		if(!Boolean.parseBoolean(config.getProperty("indexingFinished"))) {
+			Iterator<BlockEntry> blockProvider = new FileBasedBlockController.FileBasedBlockIterator(blockFile);
+			// This event handler is called concurrently, be careful with synchronization
+			try {
+				final LuceneIndexerEventHandler indexEventHandler = new LuceneIndexerEventHandler(indexDir);
+				Runnable code = () -> {
+					IndexerController indexController = new IndexerController(targetDumpFile, indexEventHandler, blockProvider);
+					indexController.run();
+					config.setProperty("indexingFinished", "true");
+				};
+				threadPool.submit(code);
+			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}

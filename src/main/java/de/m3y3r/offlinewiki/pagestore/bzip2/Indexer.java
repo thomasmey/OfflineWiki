@@ -4,7 +4,6 @@
 
 package de.m3y3r.offlinewiki.pagestore.bzip2;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;

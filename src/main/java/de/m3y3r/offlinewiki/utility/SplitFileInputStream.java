@@ -61,6 +61,11 @@ public class SplitFileInputStream extends InputStream {
 		}
 	}
 
+	/**
+	 * 
+	 * @param pos in bytes
+	 * @throws IOException
+	 */
 	public void seek(long pos) throws IOException {
 		if(pos < 0) throw new IllegalArgumentException();
 

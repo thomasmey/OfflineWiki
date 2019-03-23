@@ -14,6 +14,8 @@ public class HtmlUtility {
 		entityMap.put("&quot;",'\u0022');
 		entityMap.put("&amp;",'\u0026');
 		entityMap.put("&nbsp;",'\u00a0');
+		entityMap.put("&lt;",'<');
+		entityMap.put("&gt;",'>');
 	}
 
 	public static String decodeEntities(CharSequence input) {
