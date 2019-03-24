@@ -1,4 +1,4 @@
-package de.m3y3r.offlinewiki.pagestore.bzip2;
+package de.m3y3r.offlinewiki.pagestore.bzip2.index;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -9,9 +9,9 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.BlockEntry;
-import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.FileBasedBlockIterator;
-import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.IndexState;
+import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
+import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry.IndexState;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockController;
 import de.m3y3r.offlinewiki.utility.Bzip2BlockInputStream;
 import de.m3y3r.offlinewiki.utility.SplitFile;
 
@@ -20,18 +20,18 @@ public class IndexerController implements Runnable, Closeable {
 	private final SplitFile xmlDumpFile;
 	private final IndexerEventListener indexerEventListener;
 	private final ExecutorService threadPool;
-	private final Iterator<BlockEntry> blockProvider;
+	private final BlockController blockController;
 
-	public IndexerController(SplitFile xmDumpFile, IndexerEventListener indexEventListener, Iterator<BlockEntry> blockProvider) {
+	public IndexerController(SplitFile xmDumpFile, IndexerEventListener indexEventListener, BlockController blockController) {
 		this.xmlDumpFile = xmDumpFile;
 		this.indexerEventListener = indexEventListener;
+		this.blockController = blockController;
 //		int noThreads = Runtime.getRuntime().availableProcessors();
 		int noThreads = 1;
 //		this.threadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 		this.threadPool = new ThreadPoolExecutor(0, noThreads,
 				0L, TimeUnit.MILLISECONDS,
 				new LinkedBlockingQueue<Runnable>(2));
-		this.blockProvider = blockProvider;
 	}
 
 	@Override
@@ -39,10 +39,11 @@ public class IndexerController implements Runnable, Closeable {
 		boolean blockFinderFinished = false;
 		BlockEntry currentBits = null;
 
+		Iterator<BlockEntry> blockProvider = blockController.getBlockIterator();
 		outer:
 			while(!blockFinderFinished) {
 
-				// wait a bit
+				// wait a bit for blockProvider to actually find more blocks, this is for async blockProvider
 				try {
 					Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 				} catch (InterruptedException e) {
@@ -54,12 +55,12 @@ public class IndexerController implements Runnable, Closeable {
 						return;
 
 					currentBits = blockProvider.next();
-
 					// search first INITAL block, i.e. a block that need indexing
-					if(currentBits == null) {
+					if(currentBits != null) {
 						if(currentBits.indexState != IndexState.INITIAL)
 							continue outer;
 					}
+					System.out.format("processing block %d %d\n", currentBits.blockNo, currentBits.readCountBits);
 
 					try (Bzip2BlockInputStream stream = new Bzip2BlockInputStream(xmlDumpFile, currentBits.readCountBits)) {
 						final BlockEntry be = currentBits;
@@ -74,8 +75,7 @@ public class IndexerController implements Runnable, Closeable {
 							public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {}
 							@Override
 							public void onEndOfStream(IndexerEvent event, boolean filePos) {
-								System.out.println("commit index state");
-								((FileBasedBlockIterator) blockProvider).setBlockFinished(be.blockNo);
+								blockController.setBlockFinished(be.blockNo);
 							}
 						};
 						indexerJob.addEventListener(stopper);

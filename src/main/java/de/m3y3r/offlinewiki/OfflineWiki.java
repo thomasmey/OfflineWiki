@@ -1,7 +1,6 @@
 /*
  * Copyright 2012 Thomas Meyer
  */
-
 package de.m3y3r.offlinewiki;
 
 import java.io.File;
@@ -14,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.EventObject;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -29,12 +27,12 @@ import javax.xml.stream.XMLStreamException;
 import de.m3y3r.offlinewiki.frontend.swing.SwingDriver;
 import de.m3y3r.offlinewiki.pagestore.Store;
 import de.m3y3r.offlinewiki.pagestore.bzip2.BZip2Store;
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockFinder;
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockFinderEventListener;
-import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController;
-import de.m3y3r.offlinewiki.pagestore.bzip2.FileBasedBlockController.BlockEntry;
-import de.m3y3r.offlinewiki.pagestore.bzip2.IndexerController;
-import de.m3y3r.offlinewiki.pagestore.bzip2.LuceneIndexerEventHandler;
+import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinder;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinderEventListener;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.jdbc.JdbcBlockController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexerController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.index.jdbc.JdbcIndexerEventHandler;
 import de.m3y3r.offlinewiki.utility.DownloadEventListener;
 import de.m3y3r.offlinewiki.utility.Downloader;
 import de.m3y3r.offlinewiki.utility.SplitFile;
@@ -66,7 +64,6 @@ public class OfflineWiki implements Runnable {
 		instance = this;
 		log = Logger.getLogger(Config.LOGGER_NAME);
 		threadPool = Executors.newCachedThreadPool();
-
 		Properties configDefaults = new Properties();
 		try(InputStream inDefault = this.getClass().getResourceAsStream("/config.xml")) {
 			configDefaults.loadFromXML(inDefault);
@@ -137,8 +134,10 @@ public class OfflineWiki implements Runnable {
 
 		//FIXME: isRestart must not be true when etag of wiki dump file did change
 		boolean isRestart = true;
+
+		JdbcBlockController blockController = new JdbcBlockController();
 		// restart from the last block the previous run did find, or null if no block file exists yet
-		BlockEntry restartPos = FileBasedBlockController.getLastEntry(blockFile);
+		BlockEntry restartPos = blockController.getLatestEntry();
 
 		if(!Boolean.parseBoolean(config.getProperty("downloadFinished"))) {
 			if(!isRestart) {
@@ -188,8 +187,7 @@ public class OfflineWiki implements Runnable {
 		}
 
 		if(!Boolean.parseBoolean(config.getProperty("blockSearchFinished"))) {
-			BlockFinder blockFinder = new BlockFinder(restartPos, targetDumpFile);
-			FileBasedBlockController blockController = new FileBasedBlockController(blockFile);
+			BlockFinder blockFinder = new BlockFinder(targetDumpFile, blockController);
 			blockFinder.addEventListener(blockController);
 
 			//TODO: Finish this one:
@@ -212,19 +210,19 @@ public class OfflineWiki implements Runnable {
 		}
 
 		if(!Boolean.parseBoolean(config.getProperty("indexingFinished"))) {
-			Iterator<BlockEntry> blockProvider = new FileBasedBlockController.FileBasedBlockIterator(blockFile);
 			// This event handler is called concurrently, be careful with synchronization
-			try {
-				final LuceneIndexerEventHandler indexEventHandler = new LuceneIndexerEventHandler(indexDir);
-				Runnable code = () -> {
-					IndexerController indexController = new IndexerController(targetDumpFile, indexEventHandler, blockProvider);
+//			final LuceneIndexerEventHandler indexEventHandler = new LuceneIndexerEventHandler(indexDir);
+			final JdbcIndexerEventHandler indexEventHandler = new JdbcIndexerEventHandler();
+			Runnable code = () -> {
+				IndexerController indexController = new IndexerController(targetDumpFile, indexEventHandler, blockController);
+				try {
 					indexController.run();
-					config.setProperty("indexingFinished", "true");
-				};
-				threadPool.submit(code);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+				} catch(Exception e) {
+					e.printStackTrace();
+				}
+				config.setProperty("indexingFinished", "true");
+			};
+			threadPool.submit(code);
 		}
 
 		threadPool.execute(interactionDriver);
@@ -252,5 +250,4 @@ public class OfflineWiki implements Runnable {
 	public Properties getConfig() {
 		return config;
 	}
-
 }

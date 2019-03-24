@@ -2,7 +2,7 @@
  * Copyright 2012 Thomas Meyer
  */
 
-package de.m3y3r.offlinewiki.pagestore.bzip2;
+package de.m3y3r.offlinewiki.pagestore.bzip2.index;
 
 import java.io.InputStream;
 import java.util.List;

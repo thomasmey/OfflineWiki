@@ -1,5 +1,7 @@
-package de.m3y3r.offlinewiki.pagestore.bzip2;
+package de.m3y3r.offlinewiki.pagestore.bzip2.blocks;
 
+import java.io.Closeable;
+import java.io.Flushable;
 import java.util.EventObject;
 
 public interface BlockFinderEventListener {

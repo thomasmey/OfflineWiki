@@ -1,4 +1,4 @@
-package de.m3y3r.offlinewiki.pagestore.bzip2;
+package de.m3y3r.offlinewiki.pagestore.bzip2.index.lucene;
 
 import java.io.Closeable;
 import java.io.File;
@@ -24,6 +24,9 @@ import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.BytesRef;
 
 import de.m3y3r.offlinewiki.Config;
+import de.m3y3r.offlinewiki.pagestore.bzip2.index.Indexer;
+import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexerEvent;
+import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexerEventListener;
 
 /**
  * stores indexer result in lucene
@@ -54,10 +57,17 @@ public class LuceneIndexerEventHandler implements IndexerEventListener, Flushabl
 	public void onPageTagEnd(IndexerEvent event, long currentTagEndPos) {}
 
 	@Override
-	public void onEndOfStream(IndexerEvent event, boolean normalEnd) {}
+	public void onEndOfStream(IndexerEvent event, boolean normalEnd) {
+		try {
+			flush();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
 
 	@Override
 	public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {
+//		System.out.println(title);
 		try {
 			addToIndex((Indexer) event.getSource(), index, title, pageTagStartPos);
 		} catch(IOException e) {

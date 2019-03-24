@@ -1,4 +1,4 @@
-package de.m3y3r.offlinewiki.pagestore.bzip2;
+package de.m3y3r.offlinewiki.pagestore.bzip2.blocks.file;
 
 import java.io.BufferedOutputStream;
 import java.io.Closeable;
@@ -9,7 +9,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.Flushable;
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -17,9 +16,14 @@ import java.util.EventObject;
 import java.util.Iterator;
 import java.util.List;
 
-public class FileBasedBlockController implements BlockFinderEventListener, Flushable, Closeable {
+import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
+import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry.IndexState;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinderEventListener;
 
-	public static class FileBasedBlockIterator implements Iterator<FileBasedBlockController.BlockEntry> {
+public class FileBlockController implements BlockController, BlockFinderEventListener, Flushable, Closeable {
+
+	public static class FileBasedBlockIterator implements Iterator<BlockEntry> {
 		private DataInputStream in;
 		private BlockEntry next;
 
@@ -33,7 +37,7 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 		public boolean hasNext() {
 			if(in == null) {
 				try {
-					System.out.println("bf len=" + blockFile.length());
+//					System.out.println("bf len=" + blockFile.length());
 					FileInputStream fis = new FileInputStream(blockFile);
 					in = new DataInputStream(fis);
 				} catch (IOException e) {
@@ -57,48 +61,32 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 		}
 
 		public void setBlockFinished(long blockNo) {
-		}
-	}
-
-	public static class BlockEntry implements Serializable {
-		private static final long serialVersionUID = 1L;
-
-		public static final int BLOCK_ENTRY_LEN = 20; // 8 + 8 + 4
-
-		public final long blockNo;
-		public final long readCountBits;
-		public IndexState indexState;
-
-		public BlockEntry(long blockNo, long readCountBits) {
-			this.blockNo = blockNo;
-			this.readCountBits = readCountBits;
+			setBlockState(blockNo, IndexState.FINISHED);
 		}
 
-		public static void writeObject(DataOutputStream out, BlockEntry be) 
-				throws IOException {
-			out.writeLong(be.blockNo);
-			out.writeLong(be.readCountBits);
-			out.writeInt(be.indexState.ordinal());
+		private void setBlockState(long blockNo, IndexState state) {
+			try(FileInputStream fis = new FileInputStream(blockFile);
+				DataInputStream in = new DataInputStream(fis)) {
+				long pos = blockNo * BlockEntry.BLOCK_ENTRY_LEN;
+				fis.getChannel().position(pos);
+				BlockEntry be = BlockEntry.readObject(in);
+				try(FileOutputStream fos = new FileOutputStream(blockFile, true);
+					DataOutputStream out = new DataOutputStream(fos)) {
+					fos.getChannel().position(pos);
+					be.indexState = state;
+					BlockEntry.writeObject(out, be);
+				}
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
-
-		public static BlockEntry readObject(DataInputStream in) throws IOException { 
-			long blockNo = in.readLong();
-			long readCountBits = in.readLong();
-			int indexState = in.readInt();
-
-			BlockEntry be = new BlockEntry(blockNo, readCountBits);
-			be.indexState = IndexState.values()[indexState];
-			return be;
-		}
-
 	}
 
 	private final List<BlockEntry> entries;
 	private final File blockFile;
 
-	public static enum IndexState {INITIAL, STARTED, FINISHED};
-
-	public FileBasedBlockController(File blockFile) {
+	public FileBlockController(File blockFile) {
 		this.blockFile = blockFile;
 		this.entries = new ArrayList<>(32);
 	}
@@ -126,7 +114,22 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 		flush();
 	}
 
-	public static BlockEntry getLastEntry(File blockFile) {
+	@Override
+	public void onEndOfFile(EventObject event) {
+		try {
+			close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public Iterator<BlockEntry> getBlockIterator() {
+		return new FileBasedBlockIterator(blockFile);
+	}
+
+	@Override
+	public BlockEntry getLatestEntry() {
 		if(blockFile == null || !blockFile.exists() || !blockFile.isFile() || blockFile.length() < BlockEntry.BLOCK_ENTRY_LEN) return null;
 
 		long lastCompleteEntry = blockFile.length() / BlockEntry.BLOCK_ENTRY_LEN * BlockEntry.BLOCK_ENTRY_LEN;
@@ -147,11 +150,8 @@ public class FileBasedBlockController implements BlockFinderEventListener, Flush
 	}
 
 	@Override
-	public void onEndOfFile(EventObject event) {
-		try {
-			close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+	public void setBlockFinished(long blockNo) {
+		// TODO Auto-generated method stub
+		
 	}
 }

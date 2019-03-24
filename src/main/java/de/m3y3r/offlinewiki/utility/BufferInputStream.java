@@ -1,6 +1,5 @@
 package de.m3y3r.offlinewiki.utility;
 
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
