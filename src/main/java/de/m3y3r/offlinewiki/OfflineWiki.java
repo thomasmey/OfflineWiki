@@ -31,7 +31,9 @@ import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinder;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinderEventListener;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.jdbc.JdbcBlockController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexAccess;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexerController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.index.jdbc.JdbcIndexAccess;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.jdbc.JdbcIndexerEventHandler;
 import de.m3y3r.offlinewiki.utility.DownloadEventListener;
 import de.m3y3r.offlinewiki.utility.Downloader;
@@ -79,7 +81,8 @@ public class OfflineWiki implements Runnable {
 			e.printStackTrace();
 		}
 
-		pageStore = new BZip2Store();
+		IndexAccess indexAccess = new JdbcIndexAccess();
+		pageStore = new BZip2Store(indexAccess);
 
 		interactionDriverLatch = new CountDownLatch(1);
 
@@ -193,13 +196,7 @@ public class OfflineWiki implements Runnable {
 			//TODO: Finish this one:
 			BlockFinderEventListener restartIfDownloadNotFinished = new BlockFinderEventListener() {
 				@Override
-				public void onNewBlock(EventObject event, long blockNo, long readCountBits) {
-//					try {
-//						blockController.flush();
-//					} catch (IOException e) {
-//						e.printStackTrace();
-//					}
-				}
+				public void onNewBlock(EventObject event, long blockNo, long readCountBits) {}
 				@Override
 				public void onEndOfFile(EventObject event) {
 					config.setProperty("blockSearchFinished", "true");

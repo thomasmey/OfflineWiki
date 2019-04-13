@@ -86,7 +86,6 @@ public class LuceneIndexAccess implements IndexAccess {
 	public long[] getKey(String title) {
 
 		long blockPositionInBits;
-		long blockUncompressedPosition = 0;
 		long pageUncompressedPosition;
 
 		// get title and offset in uncompressed stream
@@ -109,7 +108,7 @@ public class LuceneIndexAccess implements IndexAccess {
 				pageUncompressedPosition = field.numericValue().longValue();
 			}
 
-			return new long[] { blockPositionInBits, blockUncompressedPosition, pageUncompressedPosition };
+			return new long[] { blockPositionInBits, pageUncompressedPosition };
 		} catch(IOException e) {
 //			logger.log(Level.SEVERE, "", e);
 		}

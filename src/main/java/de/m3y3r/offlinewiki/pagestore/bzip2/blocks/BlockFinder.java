@@ -30,6 +30,7 @@ public class BlockFinder implements Runnable {
 	private long currentMagic;
 	private long readCountBits;
 	private long blockNo;
+	private long restartBlockNo = -1;
 
 	private final List<BlockFinderEventListener> eventListeners;
 	private final BlockController blockController;
@@ -57,9 +58,10 @@ public class BlockFinder implements Runnable {
 
 		BlockEntry restart = blockController.getLatestEntry();
 		if(restart != null) {
-			// be carefull to not re-process the last found and commited block
-			this.blockNo = restart.blockNo + 1;
-			this.readCountBits = restart.readCountBits + 8;
+			// be careful to not re-process the last found and commited block
+			this.blockNo = restart.blockNo;
+			this.readCountBits = restart.readCountBits;
+			this.restartBlockNo = restart.blockNo;
 		}
 		this.fileToScan = fileToScan;
 	}
@@ -164,7 +166,9 @@ public class BlockFinder implements Runnable {
 			int cb = (b >> bi) & 1;
 			currentMagic = currentMagic << 1 | cb;
 			if((currentMagic & 0xff_ff_ff_ff_ff_ffl) == COMPRESSED_MAGIC) {
-				fireEventNewBlock(blockNo, readCountBits - 48);
+				if(blockNo != restartBlockNo) {
+					fireEventNewBlock(blockNo, readCountBits - 48);
+				}
 				blockNo++;
 			}
 		}

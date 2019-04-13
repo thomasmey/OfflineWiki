@@ -2,7 +2,7 @@
  * Copyright 2012 Thomas Meyer
  */
 
-package de.m3y3r.offlinewiki;
+package de.m3y3r.offlinewiki.utility;
 
 import java.io.EOFException;
 import java.io.IOException;

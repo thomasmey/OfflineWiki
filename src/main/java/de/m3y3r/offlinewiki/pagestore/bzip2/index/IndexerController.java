@@ -57,6 +57,8 @@ public class IndexerController implements Runnable, Closeable {
 					currentBits = blockProvider.next();
 					// search first INITAL block, i.e. a block that need indexing
 					if(currentBits != null) {
+						//FIXME:
+						if(currentBits.indexState == null) currentBits.indexState = IndexState.INITIAL;
 						if(currentBits.indexState != IndexState.INITIAL)
 							continue outer;
 					}

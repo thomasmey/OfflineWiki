@@ -15,7 +15,6 @@ import de.m3y3r.offlinewiki.PageRetriever;
 import de.m3y3r.offlinewiki.WikiPage;
 import de.m3y3r.offlinewiki.pagestore.Store;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexAccess;
-import de.m3y3r.offlinewiki.pagestore.bzip2.index.lucene.LuceneIndexAccess;
 import de.m3y3r.offlinewiki.utility.BufferInputStream;
 import de.m3y3r.offlinewiki.utility.Bzip2BlockInputStream;
 import de.m3y3r.offlinewiki.utility.SplitFile;
@@ -26,8 +25,8 @@ public class BZip2Store implements Store<WikiPage, String> {
 
 	private final IndexAccess index;
 
-	public BZip2Store() {
-		index = new LuceneIndexAccess();
+	public BZip2Store(IndexAccess indexAccess) {
+		index = indexAccess;
 	}
 
 	@Override
@@ -45,14 +44,12 @@ public class BZip2Store implements Store<WikiPage, String> {
 	public WikiPage retrieveByIndexKey(String title) {
 
 		long blockPositionInBits;
-		long blockUncompressedPosition;
 		long pageUncompressedPosition;
 
 		long[] positions = index.getKey(title);
 
 		blockPositionInBits = positions[0];
-		blockUncompressedPosition = positions[1];
-		pageUncompressedPosition = positions[2];
+		pageUncompressedPosition = positions[1];
 
 		SplitFile baseFile = OfflineWiki.getInstance().getXmlDumpFile();
 		try (
@@ -61,7 +58,7 @@ public class BZip2Store implements Store<WikiPage, String> {
 				BZip2CompressorInputStream bZip2In = new BZip2CompressorInputStream(in, false);) {
 			// skip to next page; set uncompressed byte position
 			// i.e. the position relative to block start
-			long nextPagePos = pageUncompressedPosition - blockUncompressedPosition;
+			long nextPagePos = pageUncompressedPosition;
 			bZip2In.skip(nextPagePos);
 			PageRetriever pr = new PageRetriever(bZip2In);
 			WikiPage page = pr.getNext();

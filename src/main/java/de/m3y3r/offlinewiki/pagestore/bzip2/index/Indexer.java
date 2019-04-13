@@ -13,8 +13,8 @@ import java.util.logging.Logger;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
 import de.m3y3r.offlinewiki.Config;
-import de.m3y3r.offlinewiki.Utf8Reader;
 import de.m3y3r.offlinewiki.utility.HtmlUtility;
+import de.m3y3r.offlinewiki.utility.Utf8Reader;
 
 public class Indexer implements Runnable {
 

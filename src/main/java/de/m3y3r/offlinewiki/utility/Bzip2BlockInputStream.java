@@ -34,6 +34,7 @@ public class Bzip2BlockInputStream extends InputStream {
 		long readCountBits = 0;
 		int crcStream = 0;
 		final long[] blockPosBits = new long[noBlocks + 1];
+		blockPosBits[0] = fromBits;
 
 		BitByteBuffer bbb = new BitByteBuffer(bb);
 
