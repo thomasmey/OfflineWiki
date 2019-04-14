@@ -13,7 +13,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 import de.m3y3r.offlinewiki.Config;
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.jdbc.JdbcBlockController;
 import de.m3y3r.offlinewiki.utility.SplitFile;
 import de.m3y3r.offlinewiki.utility.SplitFileInputStream;

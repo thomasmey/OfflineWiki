@@ -79,7 +79,6 @@ public class Utf8Reader extends Reader {
 	}
 
 	private int readInternal() throws IOException {
-
 		int b = in.read();
 		currentFilePos++;
 		return b;

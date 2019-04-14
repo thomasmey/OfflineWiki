@@ -27,7 +27,7 @@ import javax.xml.stream.XMLStreamException;
 import de.m3y3r.offlinewiki.frontend.swing.SwingDriver;
 import de.m3y3r.offlinewiki.pagestore.Store;
 import de.m3y3r.offlinewiki.pagestore.bzip2.BZip2Store;
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinder;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinderEventListener;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.jdbc.JdbcBlockController;

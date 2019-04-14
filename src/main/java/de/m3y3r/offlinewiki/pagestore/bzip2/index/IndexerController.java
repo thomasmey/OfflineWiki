@@ -9,9 +9,9 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry.IndexState;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry.IndexState;
 import de.m3y3r.offlinewiki.utility.Bzip2BlockInputStream;
 import de.m3y3r.offlinewiki.utility.SplitFile;
 

@@ -10,8 +10,8 @@ import java.util.Iterator;
 import org.apache.commons.compress.utils.BitInputStream;
 
 import de.m3y3r.offlinewiki.Config;
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinder;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinderEventListener;
 

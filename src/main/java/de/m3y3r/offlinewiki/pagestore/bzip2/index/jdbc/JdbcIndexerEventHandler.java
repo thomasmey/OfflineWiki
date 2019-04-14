@@ -7,8 +7,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry.IndexState;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry.IndexState;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.Indexer;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexerEvent;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexerEventListener;

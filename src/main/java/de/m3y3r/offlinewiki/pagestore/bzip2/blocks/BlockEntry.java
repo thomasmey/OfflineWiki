@@ -1,4 +1,4 @@
-package de.m3y3r.offlinewiki.pagestore.bzip2;
+package de.m3y3r.offlinewiki.pagestore.bzip2.blocks;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;

@@ -10,10 +10,10 @@ import java.util.EventObject;
 import java.util.Iterator;
 import java.util.List;
 
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry;
-import de.m3y3r.offlinewiki.pagestore.bzip2.BlockEntry.IndexState;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockController;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinderEventListener;
+import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry.IndexState;
 import de.m3y3r.offlinewiki.utility.Database;
 
 public class JdbcBlockController implements BlockController, BlockFinderEventListener {
