@@ -93,7 +93,7 @@ public class FileBlockController implements BlockController, BlockFinderEventLis
 
 	@Override
 	public void onNewBlock(EventObject event, long blockNo, long readCountBits) {
-		BlockEntry entry = new BlockEntry(blockNo, readCountBits);
+		BlockEntry entry = new BlockEntry(blockNo, readCountBits, null);
 		entries.add(entry);
 	}
 

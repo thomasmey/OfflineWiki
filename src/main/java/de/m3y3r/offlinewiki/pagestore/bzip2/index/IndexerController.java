@@ -42,14 +42,6 @@ public class IndexerController implements Runnable, Closeable {
 		Iterator<BlockEntry> blockProvider = blockController.getBlockIterator();
 		outer:
 			while(!blockFinderFinished) {
-
-				// wait a bit for blockProvider to actually find more blocks, this is for async blockProvider
-				try {
-					Thread.sleep(TimeUnit.SECONDS.toMillis(5));
-				} catch (InterruptedException e) {
-					return;
-				}
-
 				while(blockProvider.hasNext()) {
 					if(Thread.interrupted())
 						return;

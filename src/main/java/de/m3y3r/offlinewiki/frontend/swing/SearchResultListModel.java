@@ -65,7 +65,7 @@ public class SearchResultListModel implements ListModel<String> {
 			newTitles = Collections.emptyList();
 		} else {
 
-			if(searchText.contains("*")) {
+			if(searchText.contains("%")) {
 				newTitles = pageStore.getIndexKeyAscendingLike(searchCount, searchText);
 			} else {
 				newTitles = pageStore.getIndexKeyAscending(searchCount, searchText);

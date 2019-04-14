@@ -74,7 +74,7 @@ public class Bzip2BlockInputStream extends InputStream {
 						
 						@Override
 						public BlockEntry getLatestEntry() {
-							BlockEntry restart = new BlockEntry(0, fromBits / 8 * 8);
+							BlockEntry restart = new BlockEntry(0, fromBits / 8 * 8, null);
 							return restart;
 						}
 						

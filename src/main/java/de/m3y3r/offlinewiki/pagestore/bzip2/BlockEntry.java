@@ -13,9 +13,10 @@ public class BlockEntry implements Serializable {
 	public final long readCountBits;
 	public IndexState indexState;
 
-	public BlockEntry(long blockNo, long readCountBits) {
+	public BlockEntry(long blockNo, long readCountBits, IndexState indexState) {
 		this.blockNo = blockNo;
 		this.readCountBits = readCountBits;
+		this.indexState = indexState;
 	}
 
 	private static final long serialVersionUID = 1L;
@@ -34,7 +35,7 @@ public class BlockEntry implements Serializable {
 		long readCountBits = in.readLong();
 		int indexState = in.readInt();
 
-		BlockEntry be = new BlockEntry(blockNo, readCountBits);
+		BlockEntry be = new BlockEntry(blockNo, readCountBits, IndexState.values()[indexState]);
 		be.indexState = IndexState.values()[indexState];
 		return be;
 	}

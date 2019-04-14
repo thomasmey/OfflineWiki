@@ -19,7 +19,7 @@ import de.m3y3r.offlinewiki.utility.Database;
 public class JdbcBlockController implements BlockController, BlockFinderEventListener {
 
 	private static final String SQL_UPDATE = "update blocks set index_state = ? where block_no = ?";
-	private static final String SQL_FETCH_LAST = "select block_no, block_start_bits from blocks where block_no = ( select max(block_no) from blocks)";
+	private static final String SQL_FETCH_LAST = "select block_no, block_start_bits, index_state from blocks where block_no = ( select max(block_no) from blocks)";
 	private static final String SQL_INSERT = "insert into blocks values (?, ?, ?)";
 
 	private static final int MAX_ENTRIES = 50;
@@ -48,7 +48,7 @@ public class JdbcBlockController implements BlockController, BlockFinderEventLis
 
 	@Override
 	public void onNewBlock(EventObject event, long blockNo, long readCountBits) {
-		BlockEntry entry = new BlockEntry(blockNo, readCountBits);
+		BlockEntry entry = new BlockEntry(blockNo, readCountBits, null);
 		entries.add(entry);
 		if(entries.size() > MAX_ENTRIES) {
 			flush();
@@ -85,7 +85,7 @@ public class JdbcBlockController implements BlockController, BlockFinderEventLis
 			try(PreparedStatement ps = c.prepareStatement(SQL_FETCH_LAST)) {
 				try(ResultSet rs = ps.executeQuery()) {
 					if(rs.next()) {
-						return new BlockEntry(rs.getLong(1), rs.getLong(2));
+						return new BlockEntry(rs.getLong(1), rs.getLong(2), IndexState.values()[rs.getInt(3)]);
 					}
 				}
 			}
@@ -104,8 +104,8 @@ public class JdbcBlockController implements BlockController, BlockFinderEventLis
 	public void setBlockFinished(long blockNo) {
 		try(Connection c = Database.getConnection()) {
 			try(PreparedStatement ps = c.prepareStatement(SQL_UPDATE)) {
-				ps.setLong(2, blockNo);
 				ps.setInt(1, IndexState.FINISHED.ordinal());
+				ps.setLong(2, blockNo);
 				int rows = ps.executeUpdate();
 			}
 		} catch (SQLException e) {
@@ -147,7 +147,7 @@ class BlockIterator implements Iterator<BlockEntry> {
 	@Override
 	public BlockEntry next() {
 		try {
-			return new BlockEntry(rs.getLong(1), rs.getLong(2));
+			return new BlockEntry(rs.getLong(1), rs.getLong(2), IndexState.values()[rs.getInt(3)]);
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}

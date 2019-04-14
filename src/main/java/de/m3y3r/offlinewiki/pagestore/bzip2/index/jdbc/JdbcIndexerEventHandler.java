@@ -48,7 +48,6 @@ public class JdbcIndexerEventHandler implements IndexerEventListener {
 
 	@Override
 	public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {
-		System.out.println("title= " + title);
 		Indexer indexer = (Indexer) event.getSource();
 		long blockStartPosInBits = indexer.getBlockStartPosition();
 
