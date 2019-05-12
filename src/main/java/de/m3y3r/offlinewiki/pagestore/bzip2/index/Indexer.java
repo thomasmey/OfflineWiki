@@ -62,7 +62,7 @@ public class Indexer implements Runnable {
 
 			currentChar = utf8Reader.read();
 			while(currentChar >= 0) {
-				if(Thread.interrupted())
+				if(Thread.currentThread().isInterrupted())
 					return;
 
 				switch (currentMode) {

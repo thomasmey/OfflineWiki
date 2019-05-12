@@ -200,6 +200,7 @@ public class OfflineWiki implements Runnable {
 				@Override
 				public void onEndOfFile(EventObject event) {
 					config.setProperty("blockSearchFinished", "true");
+					commitConfig();
 				}
 			};
 			blockFinder.addEventListener(restartIfDownloadNotFinished);
@@ -221,6 +222,7 @@ public class OfflineWiki implements Runnable {
 					e.printStackTrace();
 				}
 				config.setProperty("indexingFinished", "true");
+				commitConfig();
 			};
 			threadPool.submit(code);
 		}

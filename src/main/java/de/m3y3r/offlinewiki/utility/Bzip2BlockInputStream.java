@@ -69,6 +69,8 @@ public class Bzip2BlockInputStream extends InputStream {
 						long currentBlockPos = 0;
 
 						while(true) {
+							if(Thread.currentThread().isInterrupted())
+								return bb;
 
 							int noBits = 8;
 

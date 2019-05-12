@@ -42,7 +42,7 @@ public class IndexerController implements Runnable {
 		}
 
 		for(;blockProvider.hasNext(); currentBlock = nextBlock, nextBlock = blockProvider.next()) {
-			if(Thread.interrupted())
+			if(Thread.currentThread().isInterrupted())
 				return;
 
 			// search first INITAL block, i.e. a block that need indexing
