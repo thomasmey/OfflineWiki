@@ -17,8 +17,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -31,9 +33,7 @@ import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinder;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinderEventListener;
 import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.jdbc.JdbcBlockController;
-import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexAccess;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexerController;
-import de.m3y3r.offlinewiki.pagestore.bzip2.index.jdbc.JdbcIndexAccess;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.jdbc.JdbcIndexerEventHandler;
 import de.m3y3r.offlinewiki.utility.DownloadEventListener;
 import de.m3y3r.offlinewiki.utility.Downloader;
@@ -81,8 +81,7 @@ public class OfflineWiki implements Runnable {
 			e.printStackTrace();
 		}
 
-		IndexAccess indexAccess = new JdbcIndexAccess();
-		pageStore = new BZip2Store(indexAccess);
+		pageStore = new BZip2Store();
 
 		interactionDriverLatch = new CountDownLatch(1);
 
@@ -183,8 +182,9 @@ public class OfflineWiki implements Runnable {
 					public void onNewByte(EventObject event, int b) {}
 				};
 				downloader.addEventListener(del);
-				threadPool.submit(downloader);
-			} catch(IOException e) {
+				Future<?> downloadJob = threadPool.submit(downloader);
+				downloadJob.get();
+			} catch(IOException | InterruptedException | ExecutionException e) {
 				e.printStackTrace();
 			}
 		}
@@ -203,12 +203,15 @@ public class OfflineWiki implements Runnable {
 				}
 			};
 			blockFinder.addEventListener(restartIfDownloadNotFinished);
-			threadPool.submit(blockFinder);
+			Future<?> blockFinderJob = threadPool.submit(blockFinder);
+			try {
+				blockFinderJob.get();
+			} catch (InterruptedException | ExecutionException e) {
+				e.printStackTrace();
+			}
 		}
 
 		if(!Boolean.parseBoolean(config.getProperty("indexingFinished"))) {
-			// This event handler is called concurrently, be careful with synchronization
-//			final LuceneIndexerEventHandler indexEventHandler = new LuceneIndexerEventHandler(indexDir);
 			final JdbcIndexerEventHandler indexEventHandler = new JdbcIndexerEventHandler();
 			Runnable code = () -> {
 				IndexerController indexController = new IndexerController(targetDumpFile, indexEventHandler, blockController);

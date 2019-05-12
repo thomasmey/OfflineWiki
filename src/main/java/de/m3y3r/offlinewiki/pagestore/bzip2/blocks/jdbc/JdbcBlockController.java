@@ -5,7 +5,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EventObject;
 import java.util.Iterator;
 import java.util.List;
@@ -19,6 +18,8 @@ import de.m3y3r.offlinewiki.utility.Database;
 public class JdbcBlockController implements BlockController, BlockFinderEventListener {
 
 	private static final String SQL_UPDATE = "update blocks set index_state = ? where block_no = ?";
+//	private static final String SQL_FETCH_BLOCK_NO = "select block_no, block_start_bits, index_state from blocks where block_start_bits >= ? order by block_no asc";
+	        static final String SQL_FETCH_FROM = "select block_no, block_start_bits, index_state from blocks where block_start_bits >= ? order by block_no asc";
 	private static final String SQL_FETCH_LAST = "select block_no, block_start_bits, index_state from blocks where block_no = ( select max(block_no) from blocks)";
 	private static final String SQL_INSERT = "insert into blocks values (?, ?, ?)";
 
@@ -65,7 +66,6 @@ public class JdbcBlockController implements BlockController, BlockFinderEventLis
 					ps.addBatch();
 				}
 				int[] result = ps.executeBatch();
-				System.out.println("result=" + Arrays.toString(result));
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -96,8 +96,8 @@ public class JdbcBlockController implements BlockController, BlockFinderEventLis
 	}
 
 	@Override
-	public Iterator<BlockEntry> getBlockIterator() {
-		return new BlockIterator();
+	public Iterator<BlockEntry> getBlockIterator(long startBlockPositionInBits) {
+		return new BlockIterator(startBlockPositionInBits);
 	}
 
 	@Override
@@ -112,17 +112,55 @@ public class JdbcBlockController implements BlockController, BlockFinderEventLis
 			e.printStackTrace();
 		}
 	}
+
+//	@Override
+//	public long[] getBlockPositions(long startReadCountBits, int noBlocks) {
+//		try(Connection c = Database.getConnection()) {
+//			try(PreparedStatement ps = c.prepareStatement(SQL_FETCH_BLOCKS)) {
+//				ps.setFetchSize(noBlocks);
+//				ps.setMaxRows(noBlocks);
+//				ps.setLong(1, startReadCountBits);
+//				try(ResultSet rs = ps.executeQuery()) {
+//					long[] blocks = new long[noBlocks];
+//					int i = 0;
+//					while(rs.next()) {
+//						blocks[i++] = rs.getLong(2);
+//					}
+//					return Arrays.copyOf(blocks, i);
+//				}
+//			}
+//		} catch (SQLException e) {
+//			e.printStackTrace();
+//		}
+//		return null;
+//	}
+//
+//	@Override
+//	public int getTotalBlockNo() {
+//		try(Connection c = Database.getConnection()) {
+//			try(PreparedStatement ps = c.prepareStatement(SQL_FETCH_BLOCK_NO)) {
+//				try(ResultSet rs = ps.executeQuery()) {
+//					if(rs.next()) {
+//						return rs.getInt(1);
+//					}
+//				}
+//			}
+//		} catch (SQLException e) {
+//			e.printStackTrace();
+//		}
+//		return 0;
+//	}
 }
 
 class BlockIterator implements Iterator<BlockEntry> {
 
-	private static final String SQL_FETCH_ALL = "select block_no, block_start_bits, index_state from blocks order by block_no asc";
 	private final ResultSet rs;
 
-	public BlockIterator() {
+	public BlockIterator(long startBlockPositionInBits) {
 		try {
 			Connection c = Database.getConnection();
-			PreparedStatement ps = c.prepareStatement(SQL_FETCH_ALL);
+			PreparedStatement ps = c.prepareStatement(JdbcBlockController.SQL_FETCH_FROM);
+			ps.setLong(1, startBlockPositionInBits);
 			ResultSet rs = ps.executeQuery();
 			this.rs = rs;
 		} catch(SQLException e) {
@@ -132,22 +170,23 @@ class BlockIterator implements Iterator<BlockEntry> {
 
 	@Override
 	public boolean hasNext() {
-		boolean hasNext = false;
 		try {
-			hasNext = rs.next();
-			if(!hasNext) {
-				rs.close();
-			}
+			return !rs.isLast();
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
-		return hasNext;
+		return false;
 	}
 
 	@Override
 	public BlockEntry next() {
 		try {
-			return new BlockEntry(rs.getLong(1), rs.getLong(2), IndexState.values()[rs.getInt(3)]);
+			boolean hasNext = rs.next();
+			if(!hasNext) {
+				rs.close();
+			} else {
+				return new BlockEntry(rs.getLong(1), rs.getLong(2), IndexState.values()[rs.getInt(3)]);
+			}
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}

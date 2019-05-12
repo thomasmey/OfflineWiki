@@ -4,16 +4,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.EventObject;
-import java.util.Iterator;
 
 import org.apache.commons.compress.utils.BitInputStream;
 
 import de.m3y3r.offlinewiki.Config;
-import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockController;
-import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry;
-import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinder;
-import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockFinderEventListener;
 
 public class Bzip2BlockInputStream extends InputStream {
 
@@ -21,20 +15,20 @@ public class Bzip2BlockInputStream extends InputStream {
 
 	private byte[] piSqrt = new byte[] { 0x17, 0x72, 0x45, 0x38, 0x50, (byte) 0x90};
 
-	public Bzip2BlockInputStream(SplitFile bzip2File, long fromBits) throws IOException {
-		this.byteBuffer = buildBlocks(bzip2File, fromBits, 2);
+	public Bzip2BlockInputStream(SplitFile bzip2File, long[] blockPosBits) throws IOException {
+		this.byteBuffer = buildBlocks(bzip2File, blockPosBits);
 	}
 
-	static private enum State { COPY_HEADER, SEEK_BLOCK, SEARCH_BLOCK, FIN, COPY_BLOCKS, APPEND_END_OF_STREAM_BLOCK};
+	static private enum State { COPY_HEADER, SEEK_BLOCK, FIN, COPY_BLOCKS, APPEND_END_OF_STREAM_BLOCK};
 
-	private ByteBuffer buildBlocks(final SplitFile bzip2File, final long fromBits, final int noBlocks) throws IOException {
-		ByteBuffer bb = ByteBuffer.allocate((int) Math.pow(2, 19) * noBlocks); // FIXME: use mean bzip2 block size * 2
+	private ByteBuffer buildBlocks(final SplitFile bzip2File, final long[] blockPosBits) throws IOException {
+		int allocSize = (int) ((blockPosBits[blockPosBits.length - 1] - blockPosBits[0]) / 8) + 4096;
+		ByteBuffer bb = ByteBuffer.allocate(allocSize);
+
 		State state = State.COPY_HEADER;
-		State nextState = null;
 		long readCountBits = 0;
 		int crcStream = 0;
-		final long[] blockPosBits = new long[noBlocks + 1];
-		blockPosBits[0] = fromBits;
+		long fromBits = blockPosBits[0];
 
 		BitByteBuffer bbb = new BitByteBuffer(bb);
 
@@ -53,81 +47,18 @@ public class Bzip2BlockInputStream extends InputStream {
 						readCountBits += 8;
 					}
 					state = State.SEEK_BLOCK;
-					nextState = State.SEARCH_BLOCK;
 				}
 				break;
 
 				case SEEK_BLOCK:
 				{
 					in.seek(fromBits / 8);
-					state = nextState;
-				}
-				break;
-
-				case SEARCH_BLOCK:
-				{
-					BlockController restartBlockController = new BlockController() {
-						@Override
-						public void setBlockFinished(long blockNo) {
-							throw new UnsupportedOperationException();
-						}
-						
-						@Override
-						public BlockEntry getLatestEntry() {
-							BlockEntry restart = new BlockEntry(0, fromBits / 8 * 8, null);
-							return restart;
-						}
-						
-						@Override
-						public Iterator<BlockEntry> getBlockIterator() {
-							throw new UnsupportedOperationException();
-						}
-					};
-
-					BlockFinder bf = new BlockFinder(null, restartBlockController);
-					class NextBLockFinder implements BlockFinderEventListener {
-						boolean finished;
-						@Override
-						public void onNewBlock(EventObject event, long blockNo, long readCountBits) {
-							if(noBlocks == blockNo) {
-								finished = true;
-							}
-							blockPosBits[(int) blockNo] = readCountBits;
-						}
-						@Override
-						public void onEndOfFile(EventObject event) {
-							finished = true;
-						}
-					};
-					NextBLockFinder nbf = new NextBLockFinder();
-					bf.addEventListener(nbf);
-
-					// feed the stream to the block finder
-					while(!nbf.finished) {
-						int b = in.read();
-						if(b < 0)
-							break;
-
-						bf.update(b);
-					}
-
-//					if(!nbf.finished) {
-//						/* this can happen, when we did seek to the last bzip2 block
-//						 * as we don't scan for the end-of-stream magic, we just overrun, the
-//						 * end of the stream and didn't find a next block
-//						 */
-//						//TODO: handle this situation gracefully!
-//						throw new IllegalStateException("TODO!");
-//					}
-
-					state = State.SEEK_BLOCK;
-					nextState = State.COPY_BLOCKS;
+					state = State.COPY_BLOCKS;
 				}
 				break;
 
 				case COPY_BLOCKS:
 				{
-					// 1824653 - 1824648 
 					readCountBits = fromBits;
 					byte skipBits = (byte) (fromBits % 8);
 					try(BitInputStream bit = new BitInputStream(in, ByteOrder.BIG_ENDIAN)) {
@@ -197,12 +128,6 @@ public class Bzip2BlockInputStream extends InputStream {
 		}
 		bbb.close(); // fill unfinished bytes with 1s
 		bb.flip();
-//		try(OutputStream otest = new FileOutputStream("block-" + counter++ + ".bz2")) {
-//			while(bb.hasRemaining()) {
-//				otest.write(bb.get());
-//			}
-//		}
-//		bb.flip();
 		return bb;
 	}
 
@@ -262,14 +187,6 @@ public class Bzip2BlockInputStream extends InputStream {
 		}
 
 		private void addBits(int nextBits, int bitShift) {
-//
-//			if(nextBits < 0) { // we did hit end of stream, process buffered bits
-//				if(currentByte >= 0)
-//					return (currentByte << bitShift) & 0xff;
-//				else
-//					return -1;
-//			}
-
 //			int nb = nextBits << (24 - bitShift);
 			bitBuffer = (bitBuffer << bitShift | nextBits); // & 0xff_ff_ff_00;
 			noBits += bitShift;

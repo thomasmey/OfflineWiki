@@ -124,7 +124,7 @@ public class FileBlockController implements BlockController, BlockFinderEventLis
 	}
 
 	@Override
-	public Iterator<BlockEntry> getBlockIterator() {
+	public Iterator<BlockEntry> getBlockIterator(long startBlockPosInBits) {
 		return new FileBasedBlockIterator(blockFile);
 	}
 
@@ -151,7 +151,5 @@ public class FileBlockController implements BlockController, BlockFinderEventLis
 
 	@Override
 	public void setBlockFinished(long blockNo) {
-		// TODO Auto-generated method stub
-		
 	}
 }
