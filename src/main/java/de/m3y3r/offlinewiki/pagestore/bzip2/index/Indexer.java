@@ -4,6 +4,7 @@
 
 package de.m3y3r.offlinewiki.pagestore.bzip2.index;
 
+import java.io.EOFException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -64,6 +65,7 @@ public class Indexer implements Runnable {
 			while(currentChar >= 0) {
 				if(Thread.currentThread().isInterrupted())
 					return;
+//				System.out.print((char)currentChar);
 
 				switch (currentMode) {
 				case CHARACTERS:
@@ -86,12 +88,10 @@ public class Indexer implements Runnable {
 					if(currentChar == '/') {
 						nextMode = ParserMode.TAG_NAME_CLOSE;
 						break;
-					}
-					if(currentChar == ' ') {
+					} else if(currentChar == ' ') {
 						nextMode = ParserMode.TAG_ATTRIBUTE;
 						break;
-					}
-					if(currentChar == '>') {
+					} else if(currentChar == '>') {
 						currentTag = sbElement.toString();
 						levelName[levelSize] = sbElement;
 						levelSize++;
@@ -181,8 +181,17 @@ public class Indexer implements Runnable {
 				currentChar = utf8Reader.read();
 			}
 
-			normalEnd = true;
 
+			normalEnd = true;
+			System.out.format("Indexer: End mode %s %n Level: ", currentMode);
+			for(int i = 0; i < levelSize; i++) {
+				System.out.print(levelName[i]);
+				System.out.print('.');
+			}
+			System.out.println();
+		} catch (EOFException e) {
+			logger.log(Level.WARNING, "Preliminary end of file while reading next UTF-8 character");
+			normalEnd = true;
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Exception for block config: {0}", inputStream.toString());
 			logger.log(Level.SEVERE, "failed!", e);
@@ -195,7 +204,11 @@ public class Indexer implements Runnable {
 	private void fireEventEndOfStream(boolean normalEnd) {
 		IndexerEvent event = new IndexerEvent(this);
 		for(IndexerEventListener listener: eventListeners) {
-			listener.onEndOfStream(event, normalEnd);
+			try {
+				listener.onEndOfStream(event, normalEnd);
+			} catch(Exception e) {
+				logger.log(Level.SEVERE, "handler failed! continuning", e);
+			}
 		}
 	}
 

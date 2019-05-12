@@ -80,7 +80,7 @@ public class Utf8Reader extends Reader {
 
 	private int readInternal() throws IOException {
 		int b = in.read();
-		currentFilePos++;
+		if(b >= 0) currentFilePos++;
 		return b;
 	}
 }

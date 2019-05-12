@@ -4,11 +4,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
-import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry;
-import de.m3y3r.offlinewiki.pagestore.bzip2.blocks.BlockEntry.IndexState;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.Indexer;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexerEvent;
 import de.m3y3r.offlinewiki.pagestore.bzip2.index.IndexerEventListener;
@@ -65,7 +62,6 @@ public class JdbcIndexerEventHandler implements IndexerEventListener {
 					ps.addBatch();
 				}
 				int[] result = ps.executeBatch();
-				System.out.println("result=" + Arrays.toString(result));
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();

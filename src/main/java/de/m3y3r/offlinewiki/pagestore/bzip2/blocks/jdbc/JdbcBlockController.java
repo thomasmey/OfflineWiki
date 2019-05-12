@@ -23,6 +23,7 @@ public class JdbcBlockController implements BlockController, BlockFinderEventLis
 	private static final String SQL_FETCH_LAST = "select block_no, block_start_bits, index_state from blocks where block_no = ( select max(block_no) from blocks)";
 	private static final String SQL_INSERT = "insert into blocks values (?, ?, ?)";
 
+	public int totalEntries;
 	private static final int MAX_ENTRIES = 50;
 
 	private final List<BlockEntry> entries;
@@ -54,6 +55,7 @@ public class JdbcBlockController implements BlockController, BlockFinderEventLis
 		if(entries.size() > MAX_ENTRIES) {
 			flush();
 		}
+		totalEntries++;
 	}
 
 	private void flush() {
@@ -77,6 +79,7 @@ public class JdbcBlockController implements BlockController, BlockFinderEventLis
 	@Override
 	public void onEndOfFile(EventObject event) {
 		flush();
+		System.out.format("did process %d blocks %n", totalEntries);
 	}
 
 	@Override

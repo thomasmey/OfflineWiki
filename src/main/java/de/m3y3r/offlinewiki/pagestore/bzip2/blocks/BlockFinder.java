@@ -121,13 +121,14 @@ public class BlockFinder implements Runnable {
 		int mapSize = (int) Math.pow(2,30);
 		FileChannel fc = FileChannel.open(path);
 		long totalSize = fc.size();
-		System.out.format("split no %d, fileSize %d, mapSize %d\n", splitNo, totalSize, mapSize);
+		System.out.format("split no %d, fileSize %d, restart %d\n", splitNo, totalSize, restartMapPosInBytes);
 
 		long currentMapPos = restartMapPosInBytes;
 		totalSize -= currentMapPos;
 
 		long size = Math.min(totalSize, mapSize);
 		while(size > 0) {
+			System.out.format("split no %d, currentMapPos %d, totalSize %d\n", splitNo, currentMapPos, totalSize);
 			MappedByteBuffer mbb = fc.map(MapMode.READ_ONLY, currentMapPos, size);
 			while(mbb.hasRemaining()) {
 				byte b = mbb.get();
@@ -143,6 +144,7 @@ public class BlockFinder implements Runnable {
 		if(diffTime/1000 > 0)
 			System.out.format("bytes/second=%d\n", diffPos/(diffTime/1000));
 		System.out.format("total time=%ds\n", TimeUnit.MILLISECONDS.toSeconds(diffTime));
+		System.out.format("blocks processed %d %n", ((JdbcBlockController)blockController).totalEntries);
 	}
 
 	private void fireEventEndOfFile() {

@@ -26,7 +26,8 @@ public class IndexerController implements Runnable {
 		BlockEntry currentBlock = null;
 		BlockEntry nextBlock = null;
 
-		Iterator<BlockEntry> blockProvider = blockController.getBlockIterator(0 /* restartPos */);
+		long restartPos = 685112494; // block 344
+		Iterator<BlockEntry> blockProvider = blockController.getBlockIterator(restartPos);
 		if(blockProvider.hasNext()) {
 			currentBlock = blockProvider.next();
 		}
@@ -64,8 +65,12 @@ public class IndexerController implements Runnable {
 					@Override
 					public void onNewTitle(IndexerEvent event, String title, long pageTagStartPos) {}
 					@Override
-					public void onEndOfStream(IndexerEvent event, boolean filePos) {
-						blockController.setBlockFinished(be.blockNo);
+					public void onEndOfStream(IndexerEvent event, boolean normalEnd) {
+						if(normalEnd) {
+							blockController.setBlockFinished(be.blockNo);
+						} else {
+							System.err.println("parsing failed!!");
+						}
 					}
 				};
 				indexerJob.addEventListener(stopper);

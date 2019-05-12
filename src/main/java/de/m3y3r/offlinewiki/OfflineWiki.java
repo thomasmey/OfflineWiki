@@ -218,11 +218,11 @@ public class OfflineWiki implements Runnable {
 				IndexerController indexController = new IndexerController(targetDumpFile, indexEventHandler, blockController);
 				try {
 					indexController.run();
+					config.setProperty("indexingFinished", "true");
+					commitConfig();
 				} catch(Exception e) {
 					e.printStackTrace();
 				}
-				config.setProperty("indexingFinished", "true");
-				commitConfig();
 			};
 			threadPool.submit(code);
 		}
